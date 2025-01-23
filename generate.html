@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สร้าง QR Code 🚗</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 50px;
+      background-color: #f8f9fa;
+    }
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+      max-width: 500px;
+      margin: auto;
+    }
+    .header {
+      font-size: 24px;
+      color: #007bff;
+      font-weight: bold;
+    }
+    .qr-container {
+      margin: 20px 0;
+      position: relative;
+    }
+    .qr-border {
+      padding: 10px;
+      border: 2px dashed #007bff;
+      display: inline-block;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">สร้าง QR Code 🚗</div>
+    <div class="qr-container">
+      <div class="qr-border">
+        <img id="qrImage" src="" alt="QR Code" style="max-width: 200px; max-height: 200px;">
+      </div>
+    </div>
+    <button id="generateQR">สร้าง QR Code</button>
+    <button id="downloadQR" style="margin-top: 10px;" disabled>ดาวน์โหลด QR Code</button>
+  </div>
+
+  <script>
+    const generateQRButton = document.getElementById('generateQR');
+    const downloadQRButton = document.getElementById('downloadQR');
+    const qrImage = document.getElementById('qrImage');
+    const googleAppsScriptUrl = '<YOUR_GOOGLE_APPS_SCRIPT_URL>'; // URL Google Apps Script
+
+    generateQRButton.addEventListener('click', async () => {
+      // เรียก API Google Apps Script เพื่อสร้าง QR Code
+      const response = await fetch(`${googleAppsScriptUrl}?action=createQR`);
+      const data = await response.json();
+
+      if (data.qrCodeUrl) {
+        qrImage.src = data.qrCodeUrl; // อัพเดต QR Code
+        downloadQRButton.disabled = false; // เปิดใช้งานปุ่มดาวน์โหลด
+        downloadQRButton.setAttribute('data-id', data.id); // เก็บ ID สำหรับ QR Code
+      } else {
+        alert('เกิดข้อผิดพลาดในการสร้าง QR Code');
+      }
+    });
+
+    downloadQRButton.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.href = qrImage.src;
+      link.download = `QRCode-${downloadQRButton.getAttribute('data-id')}.png`; // ชื่อไฟล์ที่จะดาวน์โหลด
+      link.click();
+    });
+  </script>
+</body>
+</html>
