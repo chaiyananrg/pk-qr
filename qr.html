@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🚗 ระบบลานจอดรถ</title>
+</head>
+<body>
+  <h1>🚗 ระบบลานจอดรถ</h1>
+  <div id="result">กำลังโหลดข้อมูล...</div>
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const id = urlParams.get('id');
+    const apiUrl = '<YOUR_GOOGLE_APPS_SCRIPT_URL>'; // URL ของ Google Apps Script API
+
+    if (id) {
+      fetch(`${apiUrl}?id=${id}`)
+        .then(response => response.json())
+        .then(data => {
+          const resultDiv = document.getElementById('result');
+          if (data.error) {
+            resultDiv.innerHTML = `<p style="color: red;">❌ ${data.error}</p>`;
+          } else if (data.status === 'เข้า') {
+            resultDiv.innerHTML = `
+              <p>🚗 <b>เข้าสำเร็จ</b></p>
+              <p>🔑 รหัส: ${data.id}</p>
+              <p>📅 วันเข้า: ${data.dateIn}</p>
+              <p>🕒 เวลาเข้า: ${data.timeIn}</p>
+            `;
+          } else if (data.status === 'ออก') {
+            resultDiv.innerHTML = `
+              <p>🏁 <b>ออกสำเร็จ</b></p>
+              <p>🔑 รหัส: ${data.id}</p>
+              <p>📅 วันออก: ${data.dateOut}</p>
+              <p>🕒 เวลาออก: ${data.timeOut}</p>
+              <p>⏳ ระยะเวลาที่จอด: ${data.duration}</p>
+              <p>💵 ค่าใช้จ่าย: ${data.fee} บาท</p>
+            `;
+          }
+        })
+        .catch(error => {
+          document.getElementById('result').innerHTML = `<p style="color: red;">❌ เกิดข้อผิดพลาด: ${error.message}</p>`;
+        });
+    } else {
+      document.getElementById('result').innerHTML = `<p style="color: red;">❌ ไม่มี ID ใน URL</p>`;
+    }
+  </script>
+</body>
+</html>
