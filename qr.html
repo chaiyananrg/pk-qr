@@ -61,7 +61,7 @@
             document.getElementById("status").innerHTML = "⏳ กำลังบันทึกข้อมูล...";
 
             // ลบโค้ดเสียงออกไป
-            fetch("YOUR_GOOGLE_APPS_SCRIPT_URL", {
+            fetch("https://script.google.com/macros/s/AKfycbwYJigR_6EDDpv8QJ3JN8Skns3VH1BmXUgrKGDfmVCEBciJbnFoKOFtHD29dNloGU8T/exec", {
                 method: "POST",
                 body: JSON.stringify({ id: content })
             })
