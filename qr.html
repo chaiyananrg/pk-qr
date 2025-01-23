@@ -1,49 +1,116 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🚗 ระบบลานจอดรถ</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🚗 ลานจอดรถอัจฉริยะ</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            background: linear-gradient(to right, #ffffff, #ccf2ff);
+            color: #333;
+        }
+
+        .container {
+            margin-top: 50px;
+        }
+
+        video {
+            width: 80%;
+            border: 5px solid #007bff;
+            border-radius: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin-top: 10px;
+            font-size: 18px;
+            border: none;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        #result {
+            margin-top: 20px;
+            font-size: 20px;
+            color: #007bff;
+        }
+    </style>
 </head>
 <body>
-  <h1>🚗 ระบบลานจอดรถ</h1>
-  <div id="result">กำลังโหลดข้อมูล...</div>
-  <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const id = urlParams.get('id');
-    const apiUrl = 'https://script.google.com/macros/s/AKfycbwyajAzf64KUzeG6OKczbcH_s5RiaEcAyQUvo02uHuqcsTJLXRKJBXe98zHV4vu9FzJ/exec'; // URL ของ Google Apps Script API
+    <div class="container">
+        <h1>🚗 ลานจอดรถอัจฉริยะ</h1>
+        <video id="preview"></video>
+        <p id="status">📡 กรุณาสแกน QR Code...</p>
+        <div id="result"></div>
+        <button onclick="openFullscreen()">🖥 เปิดเต็มหน้าจอ</button>
+    </div>
 
-    if (id) {
-      fetch(`${apiUrl}?id=${id}`)
-        .then(response => response.json())
-        .then(data => {
-          const resultDiv = document.getElementById('result');
-          if (data.error) {
-            resultDiv.innerHTML = `<p style="color: red;">❌ ${data.error}</p>`;
-          } else if (data.status === 'เข้า') {
-            resultDiv.innerHTML = `
-              <p>🚗 <b>เข้าสำเร็จ</b></p>
-              <p>🔑 รหัส: ${data.id}</p>
-              <p>📅 วันเข้า: ${data.dateIn}</p>
-              <p>🕒 เวลาเข้า: ${data.timeIn}</p>
-            `;
-          } else if (data.status === 'ออก') {
-            resultDiv.innerHTML = `
-              <p>🏁 <b>ออกสำเร็จ</b></p>
-              <p>🔑 รหัส: ${data.id}</p>
-              <p>📅 วันออก: ${data.dateOut}</p>
-              <p>🕒 เวลาออก: ${data.timeOut}</p>
-              <p>⏳ ระยะเวลาที่จอด: ${data.duration}</p>
-              <p>💵 ค่าใช้จ่าย: ${data.fee} บาท</p>
-            `;
-          }
-        })
-        .catch(error => {
-          document.getElementById('result').innerHTML = `<p style="color: red;">❌ เกิดข้อผิดพลาด: ${error.message}</p>`;
+    <!-- เสียงแจ้งเตือน -->
+    <audio id="scanSound" src="https://tiengdong.com/th/download/?file=true&id=2659.52670"></audio>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
+    <script>
+        let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
+
+        scanner.addListener('scan', function (content) {
+            document.getElementById("status").innerHTML = "⏳ กำลังบันทึกข้อมูล...";
+
+            let scanSound = document.getElementById("scanSound");
+            scanSound.play();  // เล่นเสียงแจ้งเตือน
+
+            fetch("https://script.google.com/macros/s/AKfycbwYJigR_6EDDpv8QJ3JN8Skns3VH1BmXUgrKGDfmVCEBciJbnFoKOFtHD29dNloGU8T/exec", {
+                method: "POST",
+                body: JSON.stringify({ id: content })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.status === "checked_in") {
+                    document.getElementById("status").innerHTML = "✅ เข้าลานจอดแล้ว!";
+                    document.getElementById("result").innerHTML = `
+                        🆔 <b>ID:</b> ${result.id} <br>
+                        ⏰ <b>เวลาเข้า:</b> ${result.time_in} <br>
+                        📅 <b>วันเข้า:</b> ${result.date_in}
+                    `;
+                } else if (result.status === "checked_out") {
+                    document.getElementById("status").innerHTML = "🚗 ออกจากลานจอดแล้ว!";
+                    document.getElementById("result").innerHTML = `
+                        🆔 <b>ID:</b> ${result.id} <br>
+                        ⏰ <b>เวลาออก:</b> ${result.time_out} <br>
+                        📅 <b>วันออก:</b> ${result.date_out} <br>
+                        ⏳ <b>เวลาที่จอด:</b> ${result.parking_time} <br>
+                        💰 <b>ค่าจอด:</b> ${result.cost} บาท
+                    `;
+                } else {
+                    document.getElementById("status").innerHTML = "❌ มีข้อผิดพลาด!";
+                }
+            });
         });
-    } else {
-      document.getElementById('result').innerHTML = `<p style="color: red;">❌ ไม่มี ID ใน URL</p>`;
-    }
-  </script>
+
+        // เปิดกล้องสแกน
+        Instascan.Camera.getCameras().then(function (cameras) {
+            if (cameras.length > 0) {
+                scanner.start(cameras[0]);
+            } else {
+                alert("ไม่พบกล้อง!");
+            }
+        }).catch(function (e) {
+            console.error(e);
+        });
+
+        // เปิดเต็มหน้าจอ
+        function openFullscreen() {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen();
+            }
+        }
+    </script>
 </body>
 </html>
