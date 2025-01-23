@@ -53,9 +53,6 @@
         <button onclick="openFullscreen()">🖥 เปิดเต็มหน้าจอ</button>
     </div>
 
-    <!-- เสียงแจ้งเตือน -->
-    <audio id="scanSound" src="https://tiengdong.com/th/download/?file=true&id=2659.52670"></audio>
-
     <script src="https://cdnjs.cloudflare.com/ajax/libs/instascan/1.0.0/instascan.min.js"></script>
     <script>
         let scanner = new Instascan.Scanner({ video: document.getElementById('preview') });
@@ -63,10 +60,8 @@
         scanner.addListener('scan', function (content) {
             document.getElementById("status").innerHTML = "⏳ กำลังบันทึกข้อมูล...";
 
-            let scanSound = document.getElementById("scanSound");
-            scanSound.play();  // เล่นเสียงแจ้งเตือน
-
-            fetch("https://script.google.com/macros/s/AKfycbwYJigR_6EDDpv8QJ3JN8Skns3VH1BmXUgrKGDfmVCEBciJbnFoKOFtHD29dNloGU8T/exec", {
+            // ลบโค้ดเสียงออกไป
+            fetch("YOUR_GOOGLE_APPS_SCRIPT_URL", {
                 method: "POST",
                 body: JSON.stringify({ id: content })
             })
