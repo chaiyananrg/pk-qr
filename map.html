@@ -2,10 +2,10 @@
 <html lang="th">
 <head>
     <meta charset="utf-8">
-    <title>Mapbox - Thai Language & Dark/Light Mode</title>
+    <title>Mapbox - Full Thai Language & Dark/Light Mode</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     
-    <!-- Mapbox GL JS v2.15.0 -->
+    <!-- ใช้ Mapbox GL JS v2.15.0 -->
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
     
@@ -58,9 +58,8 @@
             try {
                 mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhaXlhbmFuIiwiYSI6ImNtbndoeHlvbjA4ZHMycm9qajRyd3E5eGoifQ.Ua-_6wwmhrF0I6k-oZSfEg';
                 
-                // โหมดสว่างใช้สไตล์ streets (ถนนเทา ต้นไม้เขียว น้ำฟ้า)
+                // สไตล์โหมดสว่างและโหมดมืด
                 const lightStyle = 'mapbox://styles/mapbox/streets-v12';
-                // โหมดมืดใช้ navigation-night (ถนนมืด ต้นไม้เขียวเข้ม น้ำฟ้าเข้ม)
                 const darkStyle = 'mapbox://styles/mapbox/navigation-night-v1';
                 
                 let isDarkMode = false;
@@ -69,22 +68,20 @@
                     container: 'map',
                     style: lightStyle, 
                     projection: 'globe', 
-                    zoom: 5, // ซูมเข้ามาที่ระดับ 5 เพื่อให้เห็นชื่อจังหวัดชัดขึ้น
-                    center: [100.5, 15] // ศูนย์กลางประเทศไทย
+                    zoom: 6, // ซูมให้เห็นรายละเอียดของจังหวัด/อำเภอ/ถนน
+                    center: [100.5, 13.75] // ศูนย์กลาง กทม.
                 });
 
-                // --- เพิ่มส่วนควบคุมภาษา ---
-                // บังคับให้แผนที่พยายามใช้ภาษาไทย (th) ในทุกสไตล์ที่โหลด
+                // เปิดใช้งาน Plugin ภาษาพื้นฐาน
                 const languagePlugin = new MapboxLanguage({
                     defaultLanguage: 'th'
                 });
                 map.addControl(languagePlugin);
 
-                // เพิ่มปุ่มซูมและเข็มทิศ
                 map.addControl(new mapboxgl.NavigationControl(), 'top-right');
                 map.scrollZoom.disable(); 
 
-                // ฟังก์ชันตั้งค่าชั้นบรรยากาศ (Fog) ให้สีเข้ากับโหมด
+                // ฟังก์ชันตั้งค่าชั้นบรรยากาศ (Fog)
                 function updateFog() {
                     if (isDarkMode) {
                         map.setFog({
@@ -103,8 +100,34 @@
                     }
                 }
 
+                // ทุกครั้งที่สไตล์แผนที่โหลดเสร็จ จะทำงานฟังก์ชันนี้
                 map.on('style.load', () => {
                     updateFog();
+                    
+                    // --- สคริปต์บังคับภาษาไทย (ทับซ้อนข้อมูลภาษาอังกฤษ) ---
+                    const layers = map.getStyle().layers;
+                    layers.forEach(layer => {
+                        // ค้นหาเลเยอร์ที่เป็นตัวหนังสือ (symbol) และมีชื่อเลเยอร์คำว่า 'label'
+                        if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
+                            const layerId = layer.id.toLowerCase();
+                            
+                            // ข้ามป้ายหมายเลขทางหลวง (shield) เพื่อไม่ให้ตัวเลขถนนหายไป
+                            if (layerId.includes('label') && !layerId.includes('shield')) {
+                                try {
+                                    // บังคับให้ใช้ข้อมูล 'name_th' (ภาษาไทย) 
+                                    // ถ้าข้อมูลจุดนั้นไม่มี name_th ให้ใช้ 'name' (ชื่อท้องถิ่น ซึ่งในไทยก็คือภาษาไทย)
+                                    map.setLayoutProperty(layer.id, 'text-field', [
+                                        'coalesce',
+                                        ['get', 'name_th'],
+                                        ['get', 'name']
+                                    ]);
+                                } catch (e) {
+                                    // ข้ามกรณีที่เลเยอร์นั้นไม่รองรับการแก้ไข
+                                    console.warn("ไม่สามารถอัปเดตภาษาของเลเยอร์:", layer.id);
+                                }
+                            }
+                        }
+                    });
                 });
 
                 // การทำงานของปุ่มสลับโหมด
