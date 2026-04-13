@@ -2,24 +2,28 @@
 <html lang="th">
 <head>
     <meta charset="utf-8">
-    <title>Mapbox - Full Thai Language & Dark/Light Mode</title>
+    <title>Mapbox - 3D, Routing, Location & Thai</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     
-    <!-- ใช้ Mapbox GL JS v2.15.0 -->
+    <!-- Mapbox GL JS v2.15.0 -->
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
     
-    <!-- นำเข้า Mapbox GL Language Plugin -->
+    <!-- Mapbox GL Language Plugin -->
     <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-language/v1.0.0/mapbox-gl-language.js"></script>
-    
+
+    <!-- Mapbox GL Directions Plugin (สำหรับช่องกรอกจุดเริ่มต้นและปลายทาง) -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.1/mapbox-gl-directions.js"></script>
+    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.1/mapbox-gl-directions.css" type="text/css">
+
     <style>
         body { margin: 0; padding: 0; background-color: #111; font-family: sans-serif; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
         
-        /* สไตล์สำหรับปุ่มสลับโหมด */
+        /* สไตล์สำหรับปุ่มสลับโหมด ย้ายมามุมซ้ายล่าง */
         #theme-toggle {
             position: absolute;
-            top: 20px;
+            bottom: 30px;
             left: 20px;
             z-index: 1;
             background-color: #ffffff;
@@ -37,16 +41,15 @@
             background-color: #f0f0f0;
             transform: translateY(-2px);
         }
-        
-        /* สไตล์ปุ่มเมื่ออยู่ในโหมดมืด */
         .dark-btn {
             background-color: #1a2530 !important;
             color: #ffffff !important;
             border: 1px solid #334155 !important;
         }
-        .dark-btn:hover {
-            background-color: #2c3e50 !important;
-        }
+        .dark-btn:hover { background-color: #2c3e50 !important; }
+        
+        /* ปรับแต่งช่องกรอกข้อมูลนำทางให้อยู่ใต้ปุ่มหน่อย */
+        .mapboxgl-ctrl-directions { margin-top: 20px !important; margin-left: 20px !important; }
     </style>
 </head>
 <body>
@@ -58,73 +61,107 @@
             try {
                 mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhaXlhbmFuIiwiYSI6ImNtbndoeHlvbjA4ZHMycm9qajRyd3E5eGoifQ.Ua-_6wwmhrF0I6k-oZSfEg';
                 
-                // สไตล์โหมดสว่างและโหมดมืด
                 const lightStyle = 'mapbox://styles/mapbox/streets-v12';
                 const darkStyle = 'mapbox://styles/mapbox/navigation-night-v1';
-                
                 let isDarkMode = false;
 
+                // สร้างแผนที่พร้อมปรับมุมมอง 3D เบื้องต้น (pitch 60 องศา)
                 const map = new mapboxgl.Map({
                     container: 'map',
                     style: lightStyle, 
                     projection: 'globe', 
-                    zoom: 6, // ซูมให้เห็นรายละเอียดของจังหวัด/อำเภอ/ถนน
-                    center: [100.5, 13.75] // ศูนย์กลาง กทม.
+                    zoom: 13, // ซูมใกล้ขึ้นเพื่อให้เห็นตึก 3D
+                    pitch: 60, // เอียงกล้อง 60 องศาเพื่อความเป็น 3D
+                    bearing: -15, // หมุนกล้องเล็กน้อย
+                    center: [100.523, 13.733] // ศูนย์กลาง กทม. (แถวๆ จุฬา/สามย่าน ที่มีตึกเยอะ)
                 });
 
-                // เปิดใช้งาน Plugin ภาษาพื้นฐาน
-                const languagePlugin = new MapboxLanguage({
-                    defaultLanguage: 'th'
+                // 1. เพิ่มระบบนำทาง (กล่องกรอก A ไป B)
+                const directions = new MapboxDirections({
+                    accessToken: mapboxgl.accessToken,
+                    unit: 'metric',
+                    profile: 'mapbox/driving',
+                    language: 'th', // ตั้งค่าเมนูเป็นภาษาไทย
+                    placeholderOrigin: 'จุดเริ่มต้น',
+                    placeholderDestination: 'จุดที่จะไป'
                 });
-                map.addControl(languagePlugin);
+                map.addControl(directions, 'top-left');
 
-                map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+                // 2. เพิ่มปุ่มระบุตำแหน่งปัจจุบัน (GPS)
+                const geolocate = new mapboxgl.GeolocateControl({
+                    positionOptions: { enableHighAccuracy: true }, // ใช้ GPS ความแม่นยำสูง
+                    trackUserLocation: true, // ติดตามการเคลื่อนที่
+                    showUserHeading: true // แสดงทิศทางหันหน้า
+                });
+                map.addControl(geolocate, 'bottom-right');
+
+                // 3. เพิ่มปุ่มซูมเข้า-ออก และเข็มทิศ
+                map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right');
                 map.scrollZoom.disable(); 
 
-                // ฟังก์ชันตั้งค่าชั้นบรรยากาศ (Fog)
-                function updateFog() {
-                    if (isDarkMode) {
-                        map.setFog({
-                            'color': 'rgb(25, 35, 50)', 
-                            'high-color': 'rgb(15, 25, 40)', 
-                            'space-color': 'rgb(11, 11, 25)',
-                            'star-intensity': 0.8
-                        });
-                    } else {
-                        map.setFog({
-                            'color': 'rgb(186, 210, 235)', 
-                            'high-color': 'rgb(36, 92, 223)', 
-                            'space-color': 'rgb(220, 230, 240)',
-                            'star-intensity': 0.0
-                        });
+                // ฟังก์ชันสำหรับเพิ่มตึก 3D
+                function add3DBuildings() {
+                    const layers = map.getStyle().layers;
+                    let labelLayerId;
+                    for (let i = 0; i < layers.length; i++) {
+                        if (layers[i].type === 'symbol' && layers[i].layout['text-field']) {
+                            labelLayerId = layers[i].id;
+                            break;
+                        }
+                    }
+
+                    if (!map.getLayer('3d-buildings')) {
+                        map.addLayer({
+                            'id': '3d-buildings',
+                            'source': 'composite',
+                            'source-layer': 'building',
+                            'filter': ['==', 'extrude', 'true'],
+                            'type': 'fill-extrusion',
+                            'minzoom': 15, // จะแสดงตึก 3D เมื่อซูมระดับ 15 ขึ้นไป
+                            'paint': {
+                                'fill-extrusion-color': isDarkMode ? '#2c3e50' : '#e0e0e0', // สีตึกเปลี่ยนตามโหมด
+                                'fill-extrusion-height': [
+                                    'interpolate', ['linear'], ['zoom'],
+                                    15, 0,
+                                    15.05, ['get', 'height']
+                                ],
+                                'fill-extrusion-base': [
+                                    'interpolate', ['linear'], ['zoom'],
+                                    15, 0,
+                                    15.05, ['get', 'min_height']
+                                ],
+                                'fill-extrusion-opacity': 0.8
+                            }
+                        }, labelLayerId);
                     }
                 }
 
-                // ทุกครั้งที่สไตล์แผนที่โหลดเสร็จ จะทำงานฟังก์ชันนี้
+                // การตั้งค่าต่างๆ เมื่อโหลดแผนที่เสร็จ
                 map.on('style.load', () => {
-                    updateFog();
+                    // ตั้งค่าบรรยากาศ (Fog)
+                    map.setFog({
+                        'color': isDarkMode ? 'rgb(25, 35, 50)' : 'rgb(186, 210, 235)', 
+                        'high-color': isDarkMode ? 'rgb(15, 25, 40)' : 'rgb(36, 92, 223)', 
+                        'space-color': isDarkMode ? 'rgb(11, 11, 25)' : 'rgb(220, 230, 240)',
+                        'star-intensity': isDarkMode ? 0.8 : 0.0
+                    });
+
+                    // วาดตึก 3D
+                    add3DBuildings();
                     
-                    // --- สคริปต์บังคับภาษาไทย (ทับซ้อนข้อมูลภาษาอังกฤษ) ---
+                    // บังคับเปลี่ยนชื่อเป็นภาษาไทย
                     const layers = map.getStyle().layers;
                     layers.forEach(layer => {
-                        // ค้นหาเลเยอร์ที่เป็นตัวหนังสือ (symbol) และมีชื่อเลเยอร์คำว่า 'label'
                         if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
                             const layerId = layer.id.toLowerCase();
-                            
-                            // ข้ามป้ายหมายเลขทางหลวง (shield) เพื่อไม่ให้ตัวเลขถนนหายไป
                             if (layerId.includes('label') && !layerId.includes('shield')) {
                                 try {
-                                    // บังคับให้ใช้ข้อมูล 'name_th' (ภาษาไทย) 
-                                    // ถ้าข้อมูลจุดนั้นไม่มี name_th ให้ใช้ 'name' (ชื่อท้องถิ่น ซึ่งในไทยก็คือภาษาไทย)
                                     map.setLayoutProperty(layer.id, 'text-field', [
                                         'coalesce',
                                         ['get', 'name_th'],
                                         ['get', 'name']
                                     ]);
-                                } catch (e) {
-                                    // ข้ามกรณีที่เลเยอร์นั้นไม่รองรับการแก้ไข
-                                    console.warn("ไม่สามารถอัปเดตภาษาของเลเยอร์:", layer.id);
-                                }
+                                } catch (e) {}
                             }
                         }
                     });
@@ -134,7 +171,6 @@
                 const toggleBtn = document.getElementById('theme-toggle');
                 toggleBtn.addEventListener('click', () => {
                     isDarkMode = !isDarkMode;
-                    
                     if (isDarkMode) {
                         map.setStyle(darkStyle);
                         toggleBtn.innerText = '☀️ เปลี่ยนเป็นโหมดสว่าง';
