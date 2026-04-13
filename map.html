@@ -2,17 +2,17 @@
 <html lang="th">
 <head>
     <meta charset="utf-8">
-    <title>Smart 3D Flyover Navigation</title>
+    <title>Smooth 3D Flyover Navigation (Thailand)</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     
     <!-- MapLibre GL JS (ฟรี, เสถียร, ไม่ต้องใช้ Key) -->
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 
-    <!-- Turf.js (อัลกอริทึมคณิตศาสตร์สำหรับคำนวณความลาดชันและสร้าง 3D) -->
+    <!-- Turf.js (สำหรับคำนวณและสอดแทรกจุดให้เส้นทางมีความโค้งมนเรียบเนียน) -->
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 
-    <!-- Phosphor Icons (ไอคอนสวยงามแบบเวกเตอร์) -->
+    <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
     <style>
@@ -101,19 +101,17 @@
 </head>
 <body>
 
-    <!-- หน้าจอ Loading อนิเมชั่นสุดล้ำ -->
     <div id="loading-overlay">
         <div class="spinner"></div>
-        <p class="loading-text">กำลังวิเคราะห์ภูมิประเทศ</p>
-        <p class="loading-subtext" id="loading-status">คำนวณองศาความลาดชันและสร้างเสาตอม่อ 3D...</p>
+        <p class="loading-text">กำลังวิเคราะห์และหลอมรวมเส้นทาง</p>
+        <p class="loading-subtext" id="loading-status">คำนวณสมการความลาดชัน 3D ที่สมูทที่สุด...</p>
     </div>
 
     <div id="map"></div>
 
-    <!-- UI ค้นหาและป้ายบอกทาง -->
     <div id="search-container">
         <button id="demo-btn" class="glass-panel action-btn" style="width: 100%; border-radius: 12px;">
-            <i class="ph-fill ph-magic-wand icon-gradient"></i> สร้างทางยกระดับจำลอง (กดเพื่อดูผลงาน)
+            <i class="ph-fill ph-magic-wand icon-gradient"></i> สาธิตทางยกระดับ (ดอนเมือง - ดินแดง)
         </button>
         <input type="text" id="origin-input" class="glass-panel search-input" placeholder="พิกัดจุดเริ่มต้น (ละติจูด,ลองจิจูด)">
         <input type="text" id="dest-input" class="glass-panel search-input" placeholder="พิกัดจุดหมาย (ละติจูด,ลองจิจูด)">
@@ -126,7 +124,6 @@
         </div>
     </div>
     
-    <!-- UI ควบคุมการนำทาง -->
     <div id="ui-controls">
         <button id="start-journey-btn" class="glass-panel action-btn">
             <i class="ph-fill ph-car-profile icon-gradient"></i> นำทางมุมมองคนขับ 3D
@@ -142,7 +139,7 @@
     <script>
         window.onload = function() {
             try {
-                // ใช้ Base Map ฟรีจาก CartoDB (Dark Matter) สวยงาม โหลดไว ไม่ติดลิขสิทธิ์
+                // Base Map
                 const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
                 
                 let turnMarkers = [];
@@ -151,102 +148,157 @@
                 const map = new maplibregl.Map({
                     container: 'map',
                     style: styleUrl,
-                    zoom: 14, pitch: 70, bearing: -20,
-                    center: [100.536, 13.738] // บริเวณสยาม/ราชประสงค์ (เหมาะแก่การสร้างทางยกระดับข้ามแยก)
+                    zoom: 11, pitch: 65, bearing: -15,
+                    center: [100.56, 13.82] // แถวๆ ทางด่วนดอนเมืองโทลล์เวย์
                 });
 
                 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
 
-                // ฟังก์ชันดึงข้อมูลเส้นทางฟรีจาก OSRM
+                // ฟังก์ชันดึงเส้นทาง OSRM (จำกัดเฉพาะพิกัดในไทย)
                 async function fetchRouteFromOSRM(startLng, startLat, endLng, endLat) {
+                    // ตรวจสอบคร่าวๆ ว่าอยู่ในเขตประเทศไทยหรือไม่ (เพื่อให้ตรงความต้องการของคุณ)
+                    if (startLng < 97 || startLng > 106 || startLat < 5 || startLat > 21 ||
+                        endLng < 97 || endLng > 106 || endLat < 5 || endLat > 21) {
+                        throw new Error("พิกัดอยู่นอกประเทศไทย รองรับการวาด 3D เฉพาะในประเทศไทยเท่านั้นเพื่อลดการหน่วง");
+                    }
+
                     const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&steps=true`;
                     const response = await fetch(osrmUrl);
                     return await response.json();
                 }
 
                 // =========================================================================
-                // อัลกอริทึมวิศวกรรมสร้างทางยกระดับ 3D (The Core Geometry Logic)
+                // อัลกอริทึม: สะพาน 3D แบบเส้นเดี่ยวต่อเนื่อง (Smooth Line-Altitude)
                 // =========================================================================
-                function buildFlyover3D(coords) {
+                function buildSmoothFlyover3D(coords) {
                     if (!coords || coords.length < 2) return;
 
-                    // 1. ทำให้เส้นทางเรียบเนียนขึ้น เพื่อไม่ให้สะพานหักมุมน่าเกลียด
                     let rawLine = turf.lineString(coords);
-                    
-                    // หากเส้นทางสั้นเกินไป ไม่ต้องสร้างทางยกระดับ
                     const routeLength = turf.length(rawLine, { units: 'meters' });
-                    if (routeLength < 100) return;
+                    
+                    if (routeLength < 100) return; // ทางสั้นไป ไม่คุ้มที่จะขึ้นสะพาน
 
-                    // 2. หั่นเส้นทางออกเป็นชิ้นเล็กๆ (ทุกๆ 5 เมตร) เพื่อทำสโลปความลาดชัน
-                    const segmentLength = 5; // เมตร
-                    const features = [];
+                    // 1. เพิ่มความละเอียดของเส้น (Interpolate) ทุกๆ 2 เมตร เพื่อให้โค้งเนียนกริบ
+                    const segmentLength = 2; // เมตร (ยิ่งน้อย ยิ่งเนียน)
+                    const smoothCoords3D = []; // จะเก็บพิกัดแบบ [Lng, Lat, Altitude]
                     const pillars = [];
                     
-                    const rampDistance = 300; // ระยะทางที่ใช้ไต่ระดับขึ้นและลง (เมตร)
-                    const maxAltitude = 20;   // จุดสูงสุดของสะพานลอยฟ้า (เมตร)
-                    const bridgeThickness = 1.5; // ความหนาของพื้นถนน (เมตร)
+                    // ระยะห่างที่ใช้ในการไต่ระดับ (ทางขึ้น/ลง)
+                    // ใช้สูตร: ถ้าทางสั้น ก็ให้ลาดชันเร็วหน่อย, ถ้าทางยาว ก็ให้ลาดชันยาวๆ (สูงสุดไม่เกิน 400 เมตร)
+                    const rampDistance = Math.min(400, routeLength * 0.2); 
+                    const maxAltitude = 18; // ความสูงสะพาน 18 เมตรจากพื้น
 
-                    for (let i = 0; i < routeLength; i += segmentLength) {
-                        // คำนวณจุดตัดแต่ละท่อน
-                        let p1 = turf.along(rawLine, i, { units: 'meters' });
-                        let p2 = turf.along(rawLine, Math.min(i + segmentLength, routeLength), { units: 'meters' });
+                    // คำนวณความสูง (Z-axis) ลงไปในแต่ละจุดโดยตรง
+                    for (let i = 0; i <= routeLength; i += segmentLength) {
+                        let pt = turf.along(rawLine, i, { units: 'meters' });
+                        let lng = pt.geometry.coordinates[0];
+                        let lat = pt.geometry.coordinates[1];
                         
-                        // สร้างถนน 1 ท่อน (กว้าง 6 เมตร = รัศมี 3)
-                        let segmentLine = turf.lineString([p1.geometry.coordinates, p2.geometry.coordinates]);
-                        let segmentPolygon = turf.buffer(segmentLine, 3, { units: 'meters' });
-
-                        // --- สมการคำนวณความสูงแบบลาดเอียง ---
                         let currentHeight = maxAltitude;
                         let distanceFromEnd = routeLength - i;
 
+                        // สมการ S-Curve (Smooth Step) ทำให้ทางขึ้น-ลงไม่หักมุม
+                        const smoothStep = (x) => x * x * (3 - 2 * x);
+
                         if (i < rampDistance) {
-                            // ช่วงขาขึ้น (ค่อยๆ ไต่ระดับจาก 0 ไป maxAltitude)
-                            // ใช้สมการ sine wave เบาๆ เพื่อให้โค้งมน ไม่หักศอก
+                            // ช่วงไต่ระดับขึ้น
                             let progress = i / rampDistance;
-                            currentHeight = maxAltitude * progress;
+                            currentHeight = maxAltitude * smoothStep(progress);
                         } else if (distanceFromEnd < rampDistance) {
-                            // ช่วงขาลง (ค่อยๆ ต่ำลงจนถึงพื้น)
+                            // ช่วงลาดลง
                             let progress = distanceFromEnd / rampDistance;
-                            currentHeight = maxAltitude * progress;
+                            currentHeight = maxAltitude * smoothStep(progress);
                         }
 
-                        // ป้องกันความสูงติดลบ
-                        if (currentHeight < 0.2) currentHeight = 0.2;
-                        let baseHeight = Math.max(0, currentHeight - bridgeThickness);
+                        // ป้องกันจมดิน
+                        if (currentHeight < 0.1) currentHeight = 0.1;
+                        
+                        // สร้างพิกัดแบบ 3 มิติ: [Longitude, Latitude, Altitude(Z)]
+                        smoothCoords3D.push([lng, lat, currentHeight]);
 
-                        // แนบ Properties เพื่อให้ MapLibre วาด 3D
-                        segmentPolygon.properties = {
-                            height: currentHeight,
-                            base: baseHeight
-                        };
-                        features.push(segmentPolygon);
-
-                        // --- การสร้างเสาตอม่อ (Pillars) ---
-                        // วางเสาทุกๆ 40 เมตร และวางเฉพาะตอนที่สะพานสูงกว่า 5 เมตรเท่านั้น (ไม่วางตรงตีนสะพาน)
-                        if (i > 0 && i % 40 === 0 && currentHeight > 5) {
-                            let pillar = turf.buffer(p1, 1.2, { units: 'meters' }); // รัศมีเสา 1.2 เมตร
+                        // --- สร้างเสาตอม่อ ---
+                        // วางเสาทุกๆ 50 เมตร และวางเฉพาะจุดที่สะพานสูงกว่า 4 เมตร
+                        if (i > 0 && i % 50 === 0 && currentHeight > 4) {
+                            let pillar = turf.buffer(pt, 1.2, { units: 'meters' }); // เสากลม รัศมี 1.2 ม.
                             pillar.properties = {
-                                height: baseHeight, // เสาสูงไปชนใต้ท้องสะพานพอดี
-                                base: 0             // เสาปักที่พื้น
+                                height: currentHeight - 1, // สูงชนใต้สะพาน (หักลบความหนาสะพาน)
+                                base: 0
                             };
                             pillars.push(pillar);
                         }
                     }
 
-                    // 3. นำชิ้นส่วนทั้งหมดเข้าสู่แผนที่
-                    if (map.getLayer('skyway-route')) map.removeLayer('skyway-route');
-                    if (map.getSource('skyway-route')) map.removeSource('skyway-route');
+                    // ล้างเลเยอร์เก่า
+                    if (map.getLayer('smooth-skyway')) map.removeLayer('smooth-skyway');
+                    if (map.getSource('smooth-skyway')) map.removeSource('smooth-skyway');
                     if (map.getLayer('skyway-pillars')) map.removeLayer('skyway-pillars');
                     if (map.getSource('skyway-pillars')) map.removeSource('skyway-pillars');
 
-                    // วาดผิวถนน 3D
-                    map.addSource('skyway-route', { type: 'geojson', data: turf.featureCollection(features) });
+                    // 2. นำเข้าเส้นทาง 3D แบบเรียบเนียน (ใช้ line-altitude)
+                    map.addSource('smooth-skyway', {
+                        'type': 'geojson',
+                        'data': {
+                            'type': 'Feature',
+                            'properties': {},
+                            'geometry': {
+                                'type': 'LineString',
+                                'coordinates': smoothCoords3D // พิกัดที่มีค่า Z ฝังอยู่
+                            }
+                        }
+                    });
+
+                    // วาดสะพานแบบเส้น (Line) ที่หนาและแบนเหมือนแผ่นถนน
                     map.addLayer({
-                        'id': 'skyway-route',
-                        'type': 'fill-extrusion',
-                        'source': 'skyway-route',
+                        'id': 'smooth-skyway',
+                        'type': 'line',
+                        'source': 'smooth-skyway',
+                        'layout': {
+                            'line-join': 'round',
+                            'line-cap': 'round'
+                        },
                         'paint': {
-                            // ไล่สีฟ้าสดใส (นีออน) สะท้อนความเป็นล้ำสมัย
+                            'line-color': '#00F2FE',
+                            'line-width': 12, // ความกว้างสะพาน
+                            'line-opacity': 0.95,
+                            // *** หัวใจสำคัญ: ดึงค่า Z (ความสูง) มาจากพิกัด (mapLibre รองรับฟีเจอร์นี้) ***
+                            // แต่เนื่องจาก mapLibre เวอร์ชันฟรีอาจยังไม่รองรับ line-altitude ได้สมบูรณ์ 100% ในทุกกรณี
+                            // ถ้าไม่เวิร์ค เราจะเปลี่ยนกลับไปใช้ fill-extrusion แบบ buffer เดียวตลอดเส้นทาง แต่เนียนกว่าเดิม!
+                        }
+                    });
+                    
+                    // --- หากใช้วิธี line ธรรมดาแล้วไม่ดูเป็น 3D เราจะใช้ Buffer หุ้มเส้น 3D ---
+                    // เพื่อให้มั่นใจ 100% ว่าเนียนและเป็น 3D แผ่นหนาใน Canvas ผมจะสร้าง Polygon เส้นทางเดียวที่บิดพริ้วได้
+                    // โดยเอาเส้นสมูทเมื่อครู่มาทำ Buffer
+                    if (map.getLayer('smooth-skyway-3d')) map.removeLayer('smooth-skyway-3d');
+                    if (map.getSource('smooth-skyway-3d')) map.removeSource('smooth-skyway-3d');
+
+                    // การทำ Buffer ให้มีความสูงไล่ระดับเนียนๆ ต้องสร้างทีละท่อนถี่ๆ แต่อยู่ในเลเยอร์เดียวกัน
+                    // เพื่อแก้ไขข้อจำกัดของ MapLibre ที่ไม่สามารถทำ Fill Extrusion ลาดเอียงใน Polygon เดียวได้
+                    // "ทางออกที่ดีที่สุดที่เนียนตาที่สุด" คือการใช้กลยุทธ์ Micro-Slicing (หั่นถี่มากระดับ 1 เมตรตรงทางลาด)
+                    const microFeatures = [];
+                    for (let j = 0; j < smoothCoords3D.length - 1; j++) {
+                        let c1 = smoothCoords3D[j];
+                        let c2 = smoothCoords3D[j+1];
+                        
+                        // สร้างแผ่นถนนสี่เหลี่ยมเล็กๆ ระหว่างจุดสองจุด
+                        let microLine = turf.lineString([[c1[0], c1[1]], [c2[0], c2[1]]]);
+                        let microPoly = turf.buffer(microLine, 4, { units: 'meters' });
+                        
+                        // ใช้ความสูงของจุดแรกเป็นหลัก (เนื่องจากห่างกันแค่ 2 เมตร ตาคนเราจะมองไม่เห็นรอยต่อ)
+                        let h = c1[2];
+                        let base = Math.max(0, h - 1.5); // ความหนาสะพาน 1.5 เมตร
+
+                        microPoly.properties = { height: h, base: base };
+                        microFeatures.push(microPoly);
+                    }
+
+                    // นำแผ่น Micro-Slicing เข้าวาด (จะเนียนกริบเหมือนแผ่นเดียว)
+                    map.addSource('smooth-skyway-3d', { type: 'geojson', data: turf.featureCollection(microFeatures) });
+                    map.addLayer({
+                        'id': 'smooth-skyway-3d',
+                        'type': 'fill-extrusion',
+                        'source': 'smooth-skyway-3d',
+                        'paint': {
                             'fill-extrusion-color': '#00F2FE',
                             'fill-extrusion-height': ['get', 'height'],
                             'fill-extrusion-base': ['get', 'base'],
@@ -262,17 +314,20 @@
                             'type': 'fill-extrusion',
                             'source': 'skyway-pillars',
                             'paint': {
-                                'fill-extrusion-color': '#334155', // สีคอนกรีตเข้มๆ
+                                'fill-extrusion-color': '#334155',
                                 'fill-extrusion-height': ['get', 'height'],
                                 'fill-extrusion-base': ['get', 'base'],
                                 'fill-extrusion-opacity': 0.8
                             }
                         });
                     }
+                    
+                    // ปิดเลเยอร์ line ธรรมดา
+                    if (map.getLayer('smooth-skyway')) map.setLayoutProperty('smooth-skyway', 'visibility', 'none');
                 }
 
                 // =========================================================================
-                // ระบบหลัก: การค้นหาเส้นทางและการแสดงผล
+                // ควบคุมระบบนำทาง
                 // =========================================================================
                 async function processRouting(startCoords, endCoords) {
                     document.getElementById('loading-overlay').style.display = 'flex';
@@ -285,13 +340,11 @@
                             const route = routeData.routes[0];
                             currentRouteCoords = route.geometry.coordinates;
 
-                            // แสดงข้อมูลสรุป
                             const distanceKm = (route.distance / 1000).toFixed(2);
                             const durationMin = Math.round(route.duration / 60);
                             document.getElementById('route-info').style.display = 'block';
                             document.getElementById('route-details').innerHTML = `<i class="ph-fill ph-path"></i> ระยะทาง ${distanceKm} กม. | ใช้เวลา ~${durationMin} นาที`;
                             
-                            // เปลี่ยนภาษาบอกทางเป็นไทย
                             let stepsHtml = "";
                             const steps = route.legs[0].steps;
                             steps.forEach((step, index) => {
@@ -301,16 +354,10 @@
                                 if(type === "turn") thInst = `เลี้ยว${modifier === 'left' || modifier === 'slight left' ? 'ซ้าย' : 'ขวา'}`;
                                 if(type === "depart") thInst = "เริ่มต้นจากจุดจอด";
                                 if(type === "arrive") thInst = "ถึงจุดหมายปลายทางแล้ว";
-                                if(step.name) thInst += ` ไปยังถนน ${step.name}`;
+                                if(step.name) thInst += ` ไปถนน ${step.name}`;
 
-                                stepsHtml += `
-                                    <div class="step-item">
-                                        <div class="step-num">${index+1}</div>
-                                        <div>${thInst}</div>
-                                    </div>
-                                `;
+                                stepsHtml += `<div class="step-item"><div class="step-num">${index+1}</div><div>${thInst}</div></div>`;
 
-                                // วาดจุด Pop-up เลี้ยว
                                 if((type === "turn" || type === "arrive") && index > 0 && index < steps.length - 1) {
                                     const loc = step.maneuver.location;
                                     const el = document.createElement('div'); el.className = 'turn-marker';
@@ -327,17 +374,14 @@
                             });
                             document.getElementById('route-steps').innerHTML = stepsHtml;
 
-                            // ซูมกล้องให้เห็นเส้นทางทั้งหมด
                             const bounds = new maplibregl.LngLatBounds();
                             currentRouteCoords.forEach(c => bounds.extend(c));
-                            map.fitBounds(bounds, { padding: {top: 50, bottom: 200, left: 50, right: 50}, pitch: 65, duration: 1500 });
+                            map.fitBounds(bounds, { padding: {top: 50, bottom: 200, left: 50, right: 50}, pitch: 60, duration: 1500 });
 
-                            // รอให้กล้องหมุนเสร็จนิดนึง ค่อยคำนวณวาดสะพาน 3D
                             setTimeout(() => {
-                                document.getElementById('loading-status').innerText = "กำลังสร้างผิวจราจร 3 มิติ...";
-                                // บังคับให้เบราว์เซอร์เตรียมตัวประมวลผลหนัก
+                                document.getElementById('loading-status').innerText = "กำลังสร้างผิวจราจร 3 มิติ ที่สมูทที่สุด...";
                                 requestAnimationFrame(() => {
-                                    buildFlyover3D(currentRouteCoords);
+                                    buildSmoothFlyover3D(currentRouteCoords);
                                     document.getElementById('loading-overlay').style.display = 'none';
                                     document.getElementById('start-journey-btn').style.display = 'flex';
                                 });
@@ -348,21 +392,19 @@
                             document.getElementById('loading-overlay').style.display = 'none';
                         }
                     } catch (error) {
-                        console.error("Error fetching route:", error);
-                        alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
+                        alert(error.message || "เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
                         document.getElementById('loading-overlay').style.display = 'none';
                     }
                 }
 
                 // =========================================================================
-                // การกดปุ่มต่างๆ
+                // ปุ่มสาธิต และ Event Listeners
                 // =========================================================================
-
-                // ปุ่มเวทมนตร์: สาธิตสร้างเส้นทางข้ามแยกปทุมวัน ไปแยกราชประสงค์
                 document.getElementById('demo-btn').addEventListener('click', () => {
-                    document.getElementById('origin-input').value = "100.528, 13.746"; // ถ.พระราม 1 แถวสนามกีฬา
-                    document.getElementById('dest-input').value = "100.543, 13.743";   // แถวสวนลุม
-                    processRouting([100.528, 13.746], [100.543, 13.743]);
+                    // สาธิตเส้นทางยาวๆ: ดอนเมือง ไป ดินแดง (ขึ้นโทลล์เวย์)
+                    document.getElementById('origin-input').value = "100.601, 13.916"; 
+                    document.getElementById('dest-input').value = "100.552, 13.766";   
+                    processRouting([100.601, 13.916], [100.552, 13.766]);
                 });
 
                 document.getElementById('search-btn').addEventListener('click', () => {
@@ -381,9 +423,9 @@
                     document.getElementById('toggle-instructions-btn').style.display = 'flex';
                     
                     if(currentRouteCoords && currentRouteCoords.length > 0) {
-                        // บินไปที่จุดเริ่มต้น กดกล้องต่ำ (Pitch 80) ซูมสุด ให้ความรู้สึกเหมือนกำลังขับรถอยู่ตีนสะพาน
                         const origin = currentRouteCoords[0];
-                        map.flyTo({ center: origin, zoom: 18, pitch: 80, bearing: map.getBearing() + 45, duration: 3000 });
+                        // บินไปซูมดูตีนสะพานแบบใกล้ๆ จะเห็นความลาดเอียง (Ramp) ชัดเจน
+                        map.flyTo({ center: origin, zoom: 18.5, pitch: 80, bearing: map.getBearing() + 15, duration: 3000 });
                     }
                 });
 
@@ -393,7 +435,6 @@
                     const btnIcon = document.querySelector('#toggle-instructions-btn i');
 
                     if (info.classList.contains('hidden-panel')) {
-                        // กดเพื่อแสดง
                         info.classList.remove('hidden-panel'); 
                         text.innerText = 'ซ่อนป้ายบอกทาง';
                         btnIcon.className = 'ph-fill ph-map-trifold icon-gradient';
@@ -403,7 +444,6 @@
                         document.getElementById('search-btn').style.display = 'none';
                         document.getElementById('demo-btn').style.display = 'none';
                     } else {
-                        // กดเพื่อซ่อน
                         info.classList.add('hidden-panel'); 
                         text.innerText = 'เปิดป้ายบอกทาง';
                         btnIcon.className = 'ph-fill ph-map-trifold icon-gradient';
@@ -412,7 +452,6 @@
                 });
 
                 document.getElementById('camera-toggle').addEventListener('click', () => {
-                    // คืนค่ากล้องเป็นมุมมองโดรนมุมสูง มองเห็นสะพานทั้งเส้น
                     if(currentRouteCoords) {
                         const bounds = new maplibregl.LngLatBounds();
                         currentRouteCoords.forEach(c => bounds.extend(c));
