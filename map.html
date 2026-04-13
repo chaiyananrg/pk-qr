@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="utf-8">
-    <title>Mapbox - 3D, Routing, Location & Thai</title>
+    <title>Mapbox - 3D Routing, Mobile Friendly & Satellite Popups</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     
     <!-- Mapbox GL JS v2.15.0 -->
@@ -12,49 +12,71 @@
     <!-- Mapbox GL Language Plugin -->
     <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-language/v1.0.0/mapbox-gl-language.js"></script>
 
-    <!-- Mapbox GL Directions Plugin (สำหรับช่องกรอกจุดเริ่มต้นและปลายทาง) -->
+    <!-- Mapbox GL Directions Plugin -->
     <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.1/mapbox-gl-directions.js"></script>
     <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.1/mapbox-gl-directions.css" type="text/css">
 
     <style>
-        body { margin: 0; padding: 0; background-color: #111; font-family: sans-serif; }
+        body { margin: 0; padding: 0; background-color: #111; font-family: sans-serif; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
         
-        /* สไตล์สำหรับปุ่มสลับโหมด ย้ายมามุมซ้ายล่าง */
-        #theme-toggle {
+        /* จัดกลุ่มปุ่มด้านล่าง */
+        #ui-container {
             position: absolute;
             bottom: 30px;
             left: 20px;
             z-index: 1;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* สไตล์ปุ่มทั่วไป */
+        .btn-control {
             background-color: #ffffff;
             color: #333333;
-            border: 1px solid #ccc;
-            padding: 10px 16px;
+            border: none;
+            padding: 10px 15px;
             border-radius: 8px;
             font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: all 0.2s ease;
         }
-        #theme-toggle:hover {
-            background-color: #f0f0f0;
-            transform: translateY(-2px);
-        }
-        .dark-btn {
-            background-color: #1a2530 !important;
-            color: #ffffff !important;
-            border: 1px solid #334155 !important;
-        }
+        .btn-control:hover { background-color: #f0f0f0; transform: translateY(-2px); }
+        .dark-btn { background-color: #1a2530 !important; color: #ffffff !important; border: 1px solid #334155 !important; }
         .dark-btn:hover { background-color: #2c3e50 !important; }
-        
-        /* ปรับแต่งช่องกรอกข้อมูลนำทางให้อยู่ใต้ปุ่มหน่อย */
-        .mapboxgl-ctrl-directions { margin-top: 20px !important; margin-left: 20px !important; }
+
+        /* สไตล์สำหรับจุดมาร์กเกอร์เลี้ยว */
+        .turn-marker {
+            width: 14px;
+            height: 14px;
+            background-color: #ffcc00;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 4px rgba(0,0,0,0.5);
+        }
+
+        /* ปรับแต่งสำหรับหน้าจอมือถือ (Mobile Responsive) */
+        @media (max-width: 600px) {
+            /* ย่อขนาดและปรับตำแหน่งกล่องค้นหานำทาง */
+            .mapboxgl-ctrl-top-left { top: 10px; left: 10px; right: 10px; }
+            .mapboxgl-ctrl-directions { max-width: 100% !important; width: 100% !important; margin: 0 !important; }
+            
+            /* ปรับปุ่มด้านล่างให้เรียงกันและกว้างเต็มจอ */
+            #ui-container { bottom: 15px; left: 10px; right: 60px; /* เว้นที่ให้ปุ่ม GPS */ flex-direction: column; gap: 8px; }
+            .btn-control { width: 100%; font-size: 13px; padding: 12px; }
+        }
     </style>
 </head>
 <body>
     <div id="map"></div>
-    <button id="theme-toggle">🌙 เปลี่ยนเป็นโหมดมืด</button>
+    
+    <div id="ui-container">
+        <button id="theme-toggle" class="btn-control">🌙 โหมดมืด</button>
+        <button id="camera-toggle" class="btn-control">🚁 มุมมอง 3D</button>
+    </div>
 
     <script>
         window.onload = function() {
@@ -64,71 +86,69 @@
                 const lightStyle = 'mapbox://styles/mapbox/streets-v12';
                 const darkStyle = 'mapbox://styles/mapbox/navigation-night-v1';
                 let isDarkMode = false;
+                let turnMarkers = []; // เก็บ Marker จุดเลี้ยว
 
-                // สร้างแผนที่พร้อมปรับมุมมอง 3D เบื้องต้น (pitch 60 องศา)
                 const map = new mapboxgl.Map({
                     container: 'map',
                     style: lightStyle, 
                     projection: 'globe', 
-                    zoom: 13, // ซูมใกล้ขึ้นเพื่อให้เห็นตึก 3D
-                    pitch: 60, // เอียงกล้อง 60 องศาเพื่อความเป็น 3D
-                    bearing: -15, // หมุนกล้องเล็กน้อย
-                    center: [100.523, 13.733] // ศูนย์กลาง กทม. (แถวๆ จุฬา/สามย่าน ที่มีตึกเยอะ)
+                    zoom: 14, 
+                    pitch: 60, // มุมเงย
+                    bearing: -15, // ทิศทาง
+                    center: [100.523, 13.733] // กทม.
                 });
 
-                // 1. เพิ่มระบบนำทาง (กล่องกรอก A ไป B)
+                // ระบบนำทาง
                 const directions = new MapboxDirections({
                     accessToken: mapboxgl.accessToken,
                     unit: 'metric',
                     profile: 'mapbox/driving',
-                    language: 'th', // ตั้งค่าเมนูเป็นภาษาไทย
-                    placeholderOrigin: 'จุดเริ่มต้น',
-                    placeholderDestination: 'จุดที่จะไป'
+                    language: 'th', 
+                    placeholderOrigin: 'ระบุจุดเริ่มต้น...',
+                    placeholderDestination: 'ระบุจุดหมายปลายทาง...'
                 });
                 map.addControl(directions, 'top-left');
 
-                // 2. เพิ่มปุ่มระบุตำแหน่งปัจจุบัน (GPS)
+                // ปุ่มตำแหน่งปัจจุบัน (GPS)
                 const geolocate = new mapboxgl.GeolocateControl({
-                    positionOptions: { enableHighAccuracy: true }, // ใช้ GPS ความแม่นยำสูง
-                    trackUserLocation: true, // ติดตามการเคลื่อนที่
-                    showUserHeading: true // แสดงทิศทางหันหน้า
+                    positionOptions: { enableHighAccuracy: true },
+                    trackUserLocation: true,
+                    showUserHeading: true
                 });
                 map.addControl(geolocate, 'bottom-right');
 
-                // 3. เพิ่มปุ่มซูมเข้า-ออก และเข็มทิศ
+                // ปุ่มซูมเข้า-ออก
                 map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true }), 'bottom-right');
-                map.scrollZoom.disable(); 
+                map.scrollZoom.disable(); // กันเผลอซูมด้วยลูกกลิ้งเมาส์
 
-                // ฟังก์ชันสำหรับเพิ่มตึก 3D
+                // ฟังก์ชันวาดตึก 3D
                 function add3DBuildings() {
-                    const layers = map.getStyle().layers;
-                    let labelLayerId;
-                    for (let i = 0; i < layers.length; i++) {
-                        if (layers[i].type === 'symbol' && layers[i].layout['text-field']) {
-                            labelLayerId = layers[i].id;
-                            break;
-                        }
-                    }
-
                     if (!map.getLayer('3d-buildings')) {
+                        const layers = map.getStyle().layers;
+                        let labelLayerId;
+                        for (let i = 0; i < layers.length; i++) {
+                            if (layers[i].type === 'symbol' && layers[i].layout['text-field']) {
+                                labelLayerId = layers[i].id;
+                                break;
+                            }
+                        }
+
                         map.addLayer({
                             'id': '3d-buildings',
                             'source': 'composite',
                             'source-layer': 'building',
                             'filter': ['==', 'extrude', 'true'],
                             'type': 'fill-extrusion',
-                            'minzoom': 15, // จะแสดงตึก 3D เมื่อซูมระดับ 15 ขึ้นไป
+                            'minzoom': 15,
                             'paint': {
-                                'fill-extrusion-color': isDarkMode ? '#2c3e50' : '#e0e0e0', // สีตึกเปลี่ยนตามโหมด
+                                'fill-extrusion-color': isDarkMode ? '#2c3e50' : '#e0e0e0',
                                 'fill-extrusion-height': [
                                     'interpolate', ['linear'], ['zoom'],
-                                    15, 0,
-                                    15.05, ['get', 'height']
+                                    15, 0, 15.05, ['get', 'height']
                                 ],
                                 'fill-extrusion-base': [
                                     'interpolate', ['linear'], ['zoom'],
-                                    15, 0,
-                                    15.05, ['get', 'min_height']
+                                    15, 0, 15.05, ['get', 'min_height']
                                 ],
                                 'fill-extrusion-opacity': 0.8
                             }
@@ -136,9 +156,8 @@
                     }
                 }
 
-                // การตั้งค่าต่างๆ เมื่อโหลดแผนที่เสร็จ
+                // การตั้งค่าหลังแผนที่โหลดเสร็จ
                 map.on('style.load', () => {
-                    // ตั้งค่าบรรยากาศ (Fog)
                     map.setFog({
                         'color': isDarkMode ? 'rgb(25, 35, 50)' : 'rgb(186, 210, 235)', 
                         'high-color': isDarkMode ? 'rgb(15, 25, 40)' : 'rgb(36, 92, 223)', 
@@ -146,10 +165,9 @@
                         'star-intensity': isDarkMode ? 0.8 : 0.0
                     });
 
-                    // วาดตึก 3D
                     add3DBuildings();
-                    
-                    // บังคับเปลี่ยนชื่อเป็นภาษาไทย
+
+                    // บังคับภาษาไทย
                     const layers = map.getStyle().layers;
                     layers.forEach(layer => {
                         if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
@@ -157,9 +175,7 @@
                             if (layerId.includes('label') && !layerId.includes('shield')) {
                                 try {
                                     map.setLayoutProperty(layer.id, 'text-field', [
-                                        'coalesce',
-                                        ['get', 'name_th'],
-                                        ['get', 'name']
+                                        'coalesce', ['get', 'name_th'], ['get', 'name']
                                     ]);
                                 } catch (e) {}
                             }
@@ -167,19 +183,76 @@
                     });
                 });
 
-                // การทำงานของปุ่มสลับโหมด
-                const toggleBtn = document.getElementById('theme-toggle');
-                toggleBtn.addEventListener('click', () => {
+                // --- ฟีเจอร์: แสดงภาพดาวเทียมตรงจุดเลี้ยว (Maneuvers) ---
+                directions.on('route', (e) => {
+                    // ลบ Marker เก่าออกก่อน
+                    turnMarkers.forEach(marker => marker.remove());
+                    turnMarkers = [];
+
+                    if (!e.route || !e.route[0]) return;
+                    
+                    const steps = e.route[0].legs[0].steps;
+                    
+                    steps.forEach(step => {
+                        const coords = step.maneuver.location;
+                        const instruction = step.maneuver.instruction;
+                        
+                        // สร้าง URL ขอดึงภาพดาวเทียมแบบ Static จาก Mapbox
+                        // ซูมระดับ 18 กว้าง 250px สูง 150px
+                        const staticImgUrl = `https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/${coords[0]},${coords[1]},18,0,0/250x150?access_token=${mapboxgl.accessToken}`;
+
+                        // สร้าง HTML สำหรับหน้าต่าง Pop-up
+                        const popupHTML = `
+                            <div style="text-align:center; padding: 5px;">
+                                <p style="font-size:13px; font-weight:bold; margin: 0 0 8px 0; color:#333;">${instruction}</p>
+                                <img src="${staticImgUrl}" alt="Satellite View" style="width:250px; height:150px; border-radius:6px; border: 1px solid #ccc; object-fit:cover;" onerror="this.style.display='none'">
+                                <p style="font-size:10px; color:#888; margin: 5px 0 0 0;">ภาพดาวเทียมจาก Mapbox</p>
+                            </div>
+                        `;
+
+                        // สร้างจุดกลมๆ สีเหลือง
+                        const el = document.createElement('div');
+                        el.className = 'turn-marker';
+
+                        // กำหนด Popup และ Marker
+                        const popup = new mapboxgl.Popup({ offset: 10, maxWidth: '280px' }).setHTML(popupHTML);
+                        const marker = new mapboxgl.Marker(el)
+                            .setLngLat(coords)
+                            .setPopup(popup)
+                            .addTo(map);
+
+                        turnMarkers.push(marker);
+                    });
+                });
+
+                // เมื่อล้างเส้นทาง ให้ลบ Marker ด้วย
+                directions.on('clear', () => {
+                    turnMarkers.forEach(marker => marker.remove());
+                    turnMarkers = [];
+                });
+
+                // --- ปุ่มควบคุม ---
+                document.getElementById('theme-toggle').addEventListener('click', () => {
                     isDarkMode = !isDarkMode;
+                    const btn = document.getElementById('theme-toggle');
                     if (isDarkMode) {
                         map.setStyle(darkStyle);
-                        toggleBtn.innerText = '☀️ เปลี่ยนเป็นโหมดสว่าง';
-                        toggleBtn.classList.add('dark-btn');
+                        btn.innerText = '☀️ โหมดสว่าง';
+                        btn.classList.add('dark-btn');
                     } else {
                         map.setStyle(lightStyle);
-                        toggleBtn.innerText = '🌙 เปลี่ยนเป็นโหมดมืด';
-                        toggleBtn.classList.remove('dark-btn');
+                        btn.innerText = '🌙 โหมดมืด';
+                        btn.classList.remove('dark-btn');
                     }
+                });
+
+                // ปุ่มสำหรับดึงมุมกล้องกลับมาที่ 3D ทันที
+                document.getElementById('camera-toggle').addEventListener('click', () => {
+                    map.easeTo({
+                        pitch: 60,
+                        bearing: -15,
+                        duration: 1200 // ใช้เวลาเลื่อนกล้อง 1.2 วินาทีเพื่อให้ดูนุ่มนวล
+                    });
                 });
 
             } catch (error) {
