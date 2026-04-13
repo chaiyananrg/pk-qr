@@ -1,35 +1,108 @@
 <!DOCTYPE html>
-<html>
+<html lang="th">
 <head>
-<meta charset="utf-8">
-<title>Guides</title>
-<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
-<link href="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.css" rel="stylesheet">
-<script src="https://api.mapbox.com/mapbox-gl-js/v3.20.0/mapbox-gl.js"></script>
-<style>
-body { margin: 0; padding: 0; }
-#map { position: absolute; top: 0; bottom: 0; width: 100%; }
-</style>
+    <meta charset="utf-8">
+    <title>Guides - Mapbox Globe (TH & Dark/Light Mode)</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-language/v1.0.0/mapbox-gl-language.js"></script>
+
+    <style>
+        body { margin: 0; padding: 0; background-color: #111; font-family: sans-serif; }
+        #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+        
+        /* สไตล์สำหรับปุ่มสลับโหมด */
+        #theme-toggle {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1;
+            background-color: #ffffff;
+            color: #333333;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+        }
+        #theme-toggle:hover {
+            background-color: #f0f0f0;
+            transform: translateY(-2px);
+        }
+        
+        /* ปุ่มเมื่ออยู่ในโหมดมืด (ปุ่มจะเปลี่ยนเป็นสีเข้ม) */
+        .dark-btn {
+            background-color: #333333 !important;
+            color: #ffffff !important;
+        }
+        .dark-btn:hover {
+            background-color: #444444 !important;
+        }
+    </style>
 </head>
 <body>
-<div id="map"></div>
-<script>
-    mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhaXlhbmFuIiwiYSI6ImNtbndoeHlvbjA4ZHMycm9qajRyd3E5eGoifQ.Ua-_6wwmhrF0I6k-oZSfEg';
-    const map = new mapboxgl.Map({
-        container: 'map',
-        style: 'mapbox://styles/mapbox/standard', // Use the standard style for the map
-        projection: 'globe', // display the map as a globe
-        zoom: 1, // initial zoom level, 0 is the world view, higher values zoom in
-        center: [30, 15] // center the map on this longitude and latitude
-    });
+    <div id="map"></div>
+    <button id="theme-toggle">🌙 โหมดมืด</button>
 
-    map.addControl(new mapboxgl.NavigationControl());
-    map.scrollZoom.disable();
+    <script>
+        window.onload = function() {
+            mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhaXlhbmFuIiwiYSI6ImNtbndoeHlvbjA4ZHMycm9qajRyd3E5eGoifQ.Ua-_6wwmhrF0I6k-oZSfEg';
+            
+            // สไตล์เริ่มต้น (โหมดสว่าง)
+            const lightStyle = 'mapbox://styles/mapbox/light-v11';
+            const darkStyle = 'mapbox://styles/mapbox/dark-v11';
+            let isDarkMode = false;
 
-    map.on('style.load', () => {
-        map.setFog({}); // Set the default atmosphere style
-    });
-</script>
+            const map = new mapboxgl.Map({
+                container: 'map',
+                style: lightStyle, 
+                projection: 'globe', 
+                zoom: 2, 
+                center: [100.5, 15] // ศูนย์กลางประเทศไทย
+            });
 
+            // เพิ่ม Plugin ภาษาไทย
+            // ปลั๊กอินนี้จะพยายามค้นหา field 'name_th' ในข้อมูลและนำมาแสดงผล
+            const languagePlugin = new MapboxLanguage({
+                defaultLanguage: 'th'
+            });
+            map.addControl(languagePlugin);
+
+            map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+            map.scrollZoom.disable();
+
+            map.on('style.load', () => {
+                // ตั้งค่าบรรยากาศ (Fog) ให้เข้ากับลูกโลก
+                map.setFog({
+                    'color': 'rgb(186, 210, 235)', 
+                    'high-color': 'rgb(36, 92, 223)', 
+                    'space-color': isDarkMode ? 'rgb(11, 11, 25)' : 'rgb(200, 210, 220)',
+                    'star-intensity': isDarkMode ? 0.6 : 0.0
+                }); 
+            });
+
+            // ระบบจัดการปุ่มสลับโหมด
+            const toggleBtn = document.getElementById('theme-toggle');
+            toggleBtn.addEventListener('click', () => {
+                isDarkMode = !isDarkMode;
+                
+                if (isDarkMode) {
+                    map.setStyle(darkStyle);
+                    toggleBtn.innerText = '☀️ โหมดสว่าง';
+                    toggleBtn.classList.add('dark-btn');
+                } else {
+                    map.setStyle(lightStyle);
+                    toggleBtn.innerText = '🌙 โหมดมืด';
+                    toggleBtn.classList.remove('dark-btn');
+                }
+            });
+        };
+    </script>
 </body>
 </html>
