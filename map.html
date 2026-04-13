@@ -2,14 +2,14 @@
 <html lang="th">
 <head>
     <meta charset="utf-8">
-    <title>Smart 3D Flyover Drag & Drop</title>
+    <title>Smart 3D Overpass Navigation</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     
     <!-- MapLibre GL JS -->
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 
-    <!-- Turf.js -->
+    <!-- Turf.js (คำนวณความลาดชันและรูปทรงเรขาคณิต 3D) -->
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 
     <!-- Phosphor Icons -->
@@ -21,72 +21,58 @@
         body { margin: 0; padding: 0; font-family: 'Kanit', sans-serif; overflow: hidden; background-color: #0b0f19; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
 
-        /* --- หน้าจอโหลดข้อมูล (Loading Screen) --- */
+        /* Loading Screen */
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(11, 15, 25, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-            z-index: 9999; display: none; flex-direction: column; justify-content: center; align-items: center; color: #00F2FE;
+            background: rgba(11, 15, 25, 0.9); backdrop-filter: blur(10px); z-index: 9999;
+            display: none; flex-direction: column; justify-content: center; align-items: center; color: #00F2FE;
         }
         .spinner { 
-            width: 70px; height: 70px; border: 4px solid rgba(0, 242, 254, 0.1); 
+            width: 80px; height: 80px; border: 4px solid rgba(0, 242, 254, 0.1); 
             border-top: 4px solid #00F2FE; border-bottom: 4px solid #4FACFE; 
-            border-radius: 50%; animation: spin 1s cubic-bezier(0.5, 0, 0.5, 1) infinite; 
-            box-shadow: 0 0 20px rgba(0, 242, 254, 0.4); margin-bottom: 20px; 
+            border-radius: 50%; animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite; 
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.4); margin-bottom: 25px; 
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .loading-text { font-size: 20px; font-weight: 600; text-shadow: 0 0 10px rgba(0,242,254,0.5); margin: 0; }
+        .loading-text { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: 1px; }
+        .loading-subtext { font-size: 14px; color: #8892b0; margin-top: 10px; }
 
-        /* Glassmorphism UI */
+        /* UI Panels */
         .glass-panel { 
             background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); 
             border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; 
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); color: white;
         }
-
-        /* Gradient Icons */
         .icon-gradient { background: linear-gradient(135deg, #00F2FE, #4FACFE); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 24px; }
-        .pink-gradient { background: linear-gradient(135deg, #FF007A, #FF8C00); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
-        /* UI Controls Layout */
         #search-container { position: absolute; top: 20px; left: 20px; z-index: 2; width: 340px; display: flex; flex-direction: column; gap: 12px; }
-        
-        /* Information Box */
         .info-box { padding: 15px; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
         .info-row { display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.4); padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); }
         .info-label { font-weight: 600; font-size: 12px; color: #8892b0; width: 50px; }
         .info-value { font-family: monospace; font-size: 13px; color: #fff; }
 
         #ui-controls { position: absolute; bottom: 30px; left: 20px; z-index: 2; display: flex; flex-direction: column; gap: 12px; }
-        
-        /* Buttons */
-        .action-btn { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 20px; border: none; cursor: pointer; font-family: 'Kanit', sans-serif; font-weight: 500; font-size: 15px; transition: all 0.3s; }
+        .action-btn { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 14px 20px; border: none; cursor: pointer; font-family: 'Kanit', sans-serif; font-weight: 500; font-size: 15px; transition: all 0.3s; color: white;}
         .action-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 25px rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.3); }
         
         #start-journey-btn { background: linear-gradient(135deg, #00C9FF, #92FE9D); color: #000; font-weight: 700; display: none; animation: pulse-green 2s infinite; border: none; }
         #start-journey-btn .icon-gradient { background: none; -webkit-text-fill-color: #000; }
         @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(0, 201, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0); } }
 
-        /* Route Info Box */
         #route-info { display: none; padding: 18px; font-size: 14px; max-height: 250px; overflow-y: auto; }
         .step-item { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; align-items: flex-start; }
-        .step-item:last-child { border-bottom: none; }
         .step-num { background: rgba(0,242,254,0.2); color: #00F2FE; width: 22px; height: 22px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 12px; font-weight: bold; flex-shrink: 0; }
 
-        /* Mode Locks */
         .locked-mode #search-container { display: none; }
         .hidden-panel { display: none !important; }
 
         /* Draggable Markers */
-        .custom-marker { width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; cursor: grab; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; }
-        .custom-marker:active { cursor: grabbing; transform: scale(1.1); }
+        .custom-marker { width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; cursor: grab; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; }
         .marker-origin { background: linear-gradient(135deg, #00F2FE, #4FACFE); box-shadow: 0 0 15px #00F2FE; }
         .marker-dest { background: linear-gradient(135deg, #FF007A, #FF8C00); box-shadow: 0 0 15px #FF007A; }
-        .marker-inner { width: 8px; height: 8px; background: white; border-radius: 50%; }
-
-        /* Turn Markers & Popups */
-        .turn-marker { width: 14px; height: 14px; background: #00F2FE; border: 2px solid white; border-radius: 50%; cursor: pointer; box-shadow: 0 0 15px #00F2FE; transition: all 0.3s; }
-        .turn-marker:hover { transform: scale(1.5); background: #FF007A; box-shadow: 0 0 20px #FF007A; }
-        .maplibregl-popup-content { background: rgba(15,23,42,0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,242,254,0.3); border-radius: 12px; padding: 12px; font-family: 'Kanit', sans-serif; color: white; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        
+        .turn-marker { width: 14px; height: 14px; background: #FF007A; border: 2px solid white; border-radius: 50%; cursor: pointer; box-shadow: 0 0 15px #FF007A; }
+        .maplibregl-popup-content { background: rgba(15,23,42,0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,242,254,0.3); border-radius: 12px; padding: 12px; font-family: 'Kanit', sans-serif; color: white; }
         .maplibregl-popup-tip { border-top-color: rgba(15,23,42,0.95); }
 
         @media (max-width: 600px) {
@@ -98,30 +84,28 @@
 </head>
 <body>
 
-    <!-- หน้าจอ Loading -->
     <div id="loading-overlay">
         <div class="spinner"></div>
-        <p class="loading-text">กำลังคำนวณโครงสร้าง 3D</p>
+        <p class="loading-text" id="loading-title">กำลังวิเคราะห์โครงข่ายจราจร</p>
+        <p class="loading-subtext" id="loading-status">คำนวณสะพานข้ามแยกและทางลาดเอียงอัตโนมัติ...</p>
     </div>
 
     <div id="map"></div>
 
-    <!-- UI แสดงข้อมูล (ลบ Input พิมพ์มือออก เปลี่ยนเป็นแสดงพิกัดแทน) -->
     <div id="search-container">
         <div class="glass-panel info-box">
-            <div style="font-weight: 600; color: #fff; margin-bottom: 5px; text-align: center;">
-                <i class="ph-fill ph-hand-tap icon-gradient" style="font-size: 18px; vertical-align: middle;"></i> 
-                แตะหรือลากหมุดบนแผนที่เพื่อเลือกเส้นทาง
+            <div style="font-weight: 600; color: #00F2FE; margin-bottom: 5px; text-align: center;">
+                <i class="ph-fill ph-hand-tap" style="font-size: 18px; vertical-align: middle;"></i> แตะ/ลากหมุด เพื่อสร้างทางยกระดับ
             </div>
             <div class="info-row">
-                <div class="custom-marker marker-origin" style="width:16px; height:16px; position:static;"></div>
+                <div class="custom-marker marker-origin" style="position:static;"></div>
                 <div class="info-label">เริ่มต้น</div>
-                <div class="info-value" id="origin-display">100.5280, 13.7460</div>
+                <div class="info-value" id="origin-display">-</div>
             </div>
             <div class="info-row">
-                <div class="custom-marker marker-dest" style="width:16px; height:16px; position:static;"></div>
+                <div class="custom-marker marker-dest" style="position:static;"></div>
                 <div class="info-label">จุดหมาย</div>
-                <div class="info-value" id="dest-display">100.5430, 13.7430</div>
+                <div class="info-value" id="dest-display">-</div>
             </div>
         </div>
         
@@ -131,310 +115,325 @@
         </div>
     </div>
     
-    <!-- UI ควบคุมการนำทาง -->
     <div id="ui-controls">
         <button id="start-journey-btn" class="glass-panel action-btn">
-            <i class="ph-fill ph-car-profile icon-gradient"></i> เริ่มการเดินทาง
+            <i class="ph-fill ph-car-profile icon-gradient"></i> เริ่มขับเข้าสู่ 3D
         </button>
         <button id="toggle-instructions-btn" class="glass-panel action-btn" style="display: none;">
             <i class="ph-fill ph-map-trifold icon-gradient"></i> <span id="toggle-text">เปิดป้ายบอกทาง</span>
         </button>
         <button id="camera-toggle" class="glass-panel action-btn">
-            <i class="ph-fill ph-cube icon-gradient"></i> คืนค่ามุมกล้อง 3D
+            <i class="ph-fill ph-cube icon-gradient"></i> มุมมองนก (Bird Eye)
         </button>
     </div>
 
     <script>
         window.onload = function() {
-            try {
-                // Base Map ฟรีจาก CartoDB
-                const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
-                
-                let turnMarkers = [];
-                let currentRouteCoords = null;
+            // สไตล์แผนที่ฟรีจาก CartoDB (โหมดมืดเพื่อให้สี 3D เด่น)
+            const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
+            
+            let turnMarkers = [];
+            let currentRouteCoords = null;
 
-                const map = new maplibregl.Map({
-                    container: 'map',
-                    style: styleUrl,
-                    zoom: 14, pitch: 65, bearing: -15,
-                    center: [100.535, 13.744] // สยาม กทม.
-                });
+            const map = new maplibregl.Map({
+                container: 'map',
+                style: styleUrl,
+                zoom: 14, pitch: 65, bearing: -15,
+                center: [100.536, 13.738] // กรุงเทพมหานคร
+            });
 
-                map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
+            map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
 
-                // =========================================================================
-                // ระบบหมุดอัจฉริยะ (Draggable Smart Markers)
-                // =========================================================================
-                
-                // สร้าง HTML Element สำหรับหมุด
-                const elOrigin = document.createElement('div');
-                elOrigin.className = 'custom-marker marker-origin';
-                elOrigin.innerHTML = '<div class="marker-inner"></div>';
+            // --- หมุดลากวางได้ ---
+            const oMarker = new maplibregl.Marker({ element: Object.assign(document.createElement('div'), {className: 'custom-marker marker-origin'}), draggable: true })
+                .setLngLat([100.528, 13.746]).addTo(map); // สนามกีฬา
+            const dMarker = new maplibregl.Marker({ element: Object.assign(document.createElement('div'), {className: 'custom-marker marker-dest'}), draggable: true })
+                .setLngLat([100.543, 13.743]).addTo(map); // สวนลุม
 
-                const elDest = document.createElement('div');
-                elDest.className = 'custom-marker marker-dest';
-                elDest.innerHTML = '<div class="marker-inner"></div>';
+            function updateUI() {
+                const o = oMarker.getLngLat(); const d = dMarker.getLngLat();
+                document.getElementById('origin-display').innerText = `${o.lng.toFixed(4)}, ${o.lat.toFixed(4)}`;
+                document.getElementById('dest-display').innerText = `${d.lng.toFixed(4)}, ${d.lat.toFixed(4)}`;
+            }
 
-                // นำหมุดไปวางบนแผนที่ (ค่าเริ่มต้น)
-                const originMarker = new maplibregl.Marker({ element: elOrigin, draggable: true })
-                    .setLngLat([100.52800, 13.74600]) // สนามกีฬาแห่งชาติ
-                    .addTo(map);
+            oMarker.on('dragend', () => { updateUI(); buildSmartRoute(); });
+            dMarker.on('dragend', () => { updateUI(); buildSmartRoute(); });
 
-                const destMarker = new maplibregl.Marker({ element: elDest, draggable: true })
-                    .setLngLat([100.54300, 13.74300]) // สวนลุม
-                    .addTo(map);
+            map.on('click', (e) => {
+                if (document.body.classList.contains('locked-mode')) return;
+                const c = [e.lngLat.lng, e.lngLat.lat], o = [oMarker.getLngLat().lng, oMarker.getLngLat().lat], d = [dMarker.getLngLat().lng, dMarker.getLngLat().lat];
+                if (turf.distance(c, o) < turf.distance(c, d)) oMarker.setLngLat(e.lngLat); else dMarker.setLngLat(e.lngLat);
+                updateUI(); buildSmartRoute();
+            });
 
-                // ฟังก์ชันอัปเดตตัวหนังสือแสดงพิกัด
-                function updateDisplayCoords() {
-                    const o = originMarker.getLngLat();
-                    const d = destMarker.getLngLat();
-                    document.getElementById('origin-display').innerText = `${o.lng.toFixed(4)}, ${o.lat.toFixed(4)}`;
-                    document.getElementById('dest-display').innerText = `${d.lng.toFixed(4)}, ${d.lat.toFixed(4)}`;
-                }
+            // =========================================================================
+            // อัลกอริทึมสะพาน 3D อัจฉริยะ (The Smart Overpass Engine)
+            // =========================================================================
+            
+            function calculateElevationProfile(routeLine, steps) {
+                const totalDistance = turf.length(routeLine, { units: 'meters' });
+                let crossingZones = []; // เก็บระยะทางเริ่มต้นและสิ้นสุดของทางยกระดับ
 
-                // เมื่อลากหมุดเสร็จ ให้คำนวณเส้นทางใหม่
-                originMarker.on('dragend', () => { updateDisplayCoords(); triggerRouting(); });
-                destMarker.on('dragend', () => { updateDisplayCoords(); triggerRouting(); });
-
-                // ฟีเจอร์: "คลิกบนแผนที่" เพื่อย้ายหมุดที่อยู่ใกล้ที่สุดไปหาจุดที่คลิก
-                map.on('click', (e) => {
-                    // ป้องกันการคลิกถ้าระบบถูกล็อก (เริ่มเดินทางแล้ว)
-                    if (document.body.classList.contains('locked-mode')) return;
-
-                    const clickPt = [e.lngLat.lng, e.lngLat.lat];
-                    const oPt = [originMarker.getLngLat().lng, originMarker.getLngLat().lat];
-                    const dPt = [destMarker.getLngLat().lng, destMarker.getLngLat().lat];
-
-                    // คำนวณระยะห่างว่าจุดที่คลิก ใกล้ต้นทาง หรือ ปลายทางมากกว่ากัน
-                    const distToOrigin = turf.distance(clickPt, oPt);
-                    const distToDest = turf.distance(clickPt, dPt);
-
-                    if (distToOrigin < distToDest) {
-                        originMarker.setLngLat(e.lngLat); // ย้ายจุดเริ่มต้น
-                    } else {
-                        destMarker.setLngLat(e.lngLat);   // ย้ายจุดปลายทาง
-                    }
-                    
-                    updateDisplayCoords();
-                    triggerRouting();
-                });
-
-                // =========================================================================
-                // ฟังก์ชันคำนวณเส้นทางและสร้าง 3D (OSRM + Turf.js)
-                // =========================================================================
-                async function fetchRouteFromOSRM(startLng, startLat, endLng, endLat) {
-                    if (startLng < 97 || startLng > 106 || startLat < 5 || startLat > 21) {
-                        throw new Error("พิกัดอยู่นอกประเทศไทย!");
-                    }
-                    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&steps=true`;
-                    const response = await fetch(osrmUrl);
-                    return await response.json();
-                }
-
-                function buildSmoothFlyover3D(coords) {
-                    if (!coords || coords.length < 2) return;
-
-                    let rawLine = turf.lineString(coords);
-                    const routeLength = turf.length(rawLine, { units: 'meters' });
-                    
-                    if (routeLength < 50) {
-                        // ถ้าระยะทางใกล้มาก ลบของเก่าทิ้ง ไม่ต้องวาดสะพาน 3D
-                        if (map.getLayer('smooth-skyway-3d')) map.removeLayer('smooth-skyway-3d');
-                        if (map.getSource('smooth-skyway-3d')) map.removeSource('smooth-skyway-3d');
-                        if (map.getLayer('skyway-pillars')) map.removeLayer('skyway-pillars');
-                        if (map.getSource('skyway-pillars')) map.removeSource('skyway-pillars');
-                        return; 
-                    }
-
-                    const smoothCoords3D = []; 
-                    const pillars = [];
-                    const rampDistance = Math.min(300, routeLength * 0.25); 
-                    const maxAltitude = 16; 
-
-                    for (let i = 0; i <= routeLength; i += 2) { // หั่นทุก 2 เมตร เพื่อความสมูท
-                        let pt = turf.along(rawLine, i, { units: 'meters' });
-                        let lng = pt.geometry.coordinates[0];
-                        let lat = pt.geometry.coordinates[1];
-                        
-                        let currentHeight = maxAltitude;
-                        let distanceFromEnd = routeLength - i;
-                        const smoothStep = (x) => x * x * (3 - 2 * x);
-
-                        if (i < rampDistance) {
-                            currentHeight = maxAltitude * smoothStep(i / rampDistance);
-                        } else if (distanceFromEnd < rampDistance) {
-                            currentHeight = maxAltitude * smoothStep(distanceFromEnd / rampDistance);
-                        }
-                        if (currentHeight < 0.1) currentHeight = 0.1;
-                        
-                        smoothCoords3D.push([lng, lat, currentHeight]);
-
-                        // สร้างเสาตอม่อ ทุกๆ 40 เมตร
-                        if (i > 0 && i % 40 === 0 && currentHeight > 5) {
-                            let pillar = turf.buffer(pt, 1.2, { units: 'meters' }); 
-                            pillar.properties = { height: currentHeight - 1, base: 0 };
-                            pillars.push(pillar);
-                        }
-                    }
-
-                    if (map.getLayer('smooth-skyway-3d')) map.removeLayer('smooth-skyway-3d');
-                    if (map.getSource('smooth-skyway-3d')) map.removeSource('smooth-skyway-3d');
-                    if (map.getLayer('skyway-pillars')) map.removeLayer('skyway-pillars');
-                    if (map.getSource('skyway-pillars')) map.removeSource('skyway-pillars');
-
-                    const microFeatures = [];
-                    for (let j = 0; j < smoothCoords3D.length - 1; j++) {
-                        let c1 = smoothCoords3D[j]; let c2 = smoothCoords3D[j+1];
-                        let microLine = turf.lineString([[c1[0], c1[1]], [c2[0], c2[1]]]);
-                        let microPoly = turf.buffer(microLine, 3.5, { units: 'meters' }); // สะพานกว้าง 7 ม.
-                        microPoly.properties = { height: c1[2], base: Math.max(0, c1[2] - 1.5) };
-                        microFeatures.push(microPoly);
-                    }
-
-                    map.addSource('smooth-skyway-3d', { type: 'geojson', data: turf.featureCollection(microFeatures) });
-                    map.addLayer({
-                        'id': 'smooth-skyway-3d', 'type': 'fill-extrusion', 'source': 'smooth-skyway-3d',
-                        'paint': {
-                            'fill-extrusion-color': '#00F2FE',
-                            'fill-extrusion-height': ['get', 'height'],
-                            'fill-extrusion-base': ['get', 'base'],
-                            'fill-extrusion-opacity': 0.95
+                // 1. ค้นหาจุดตัด (Intersections) จากข้อมูล OSRM
+                steps.forEach(step => {
+                    if (!step.intersections) return;
+                    step.intersections.forEach(intersect => {
+                        // ถ้าแยกนั้นมีถนนเชื่อมต่อมากกว่า 2 เส้น ถือว่าเป็นสี่แยก/สามแยกที่ควรข้าม
+                        if (intersect.bearings.length > 2) {
+                            const pt = turf.point(intersect.location);
+                            // หาระยะทางของจุดตัดนี้บนเส้นทางหลัก
+                            const distOnRoute = turf.length(turf.lineSlice(turf.point(routeLine.geometry.coordinates[0]), pt, routeLine), {units: 'meters'});
+                            
+                            // กำหนดระยะสะพานข้ามแยก: เริ่มขึ้นสะพานก่อนแยก 100 เมตร และลงสะพานหลังแยก 100 เมตร
+                            crossingZones.push([Math.max(0, distOnRoute - 100), Math.min(totalDistance, distOnRoute + 100)]);
                         }
                     });
+                });
 
-                    if (pillars.length > 0) {
-                        map.addSource('skyway-pillars', { type: 'geojson', data: turf.featureCollection(pillars) });
-                        map.addLayer({
-                            'id': 'skyway-pillars', 'type': 'fill-extrusion', 'source': 'skyway-pillars',
-                            'paint': {
-                                'fill-extrusion-color': '#334155',
-                                'fill-extrusion-height': ['get', 'height'],
-                                'fill-extrusion-base': ['get', 'base'],
-                                'fill-extrusion-opacity': 0.8
+                // 2. ควบรวมสะพานที่อยู่ใกล้กัน (Merge Overlapping Bridges)
+                // ถ้าทางลงสะพานแรก ใกล้กับทางขึ้นสะพานสอง ไม่ต้องลง ให้เชื่อมต่อกันยาวเลย!
+                crossingZones.sort((a, b) => a[0] - b[0]);
+                let mergedZones = [];
+                for (let i = 0; i < crossingZones.length; i++) {
+                    if (mergedZones.length === 0) {
+                        mergedZones.push(crossingZones[i]);
+                    } else {
+                        let lastZone = mergedZones[mergedZones.length - 1];
+                        // ถ้าระยะห่างระหว่างสะพานน้อยกว่า 150 เมตร ให้เชื่อมเป็นสะพานยาว
+                        if (crossingZones[i][0] <= lastZone[1] + 150) {
+                            lastZone[1] = Math.max(lastZone[1], crossingZones[i][1]);
+                        } else {
+                            mergedZones.push(crossingZones[i]);
+                        }
+                    }
+                }
+                return mergedZones;
+            }
+
+            function getSmoothHeight(currentDist, bridgeZones) {
+                const maxH = 14; // ความสูงสะพานข้ามแยก 14 เมตร
+                const rampLen = 80; // ระยะทางลาดเอียง 80 เมตร
+                
+                let h = 0.1; // ความสูงถนนปกติ (ติดพื้น)
+
+                for (let zone of bridgeZones) {
+                    let start = zone[0];
+                    let end = zone[1];
+
+                    if (currentDist >= start && currentDist <= end) {
+                        return maxH; // อยู่บนกลางสะพาน
+                    }
+                    
+                    // สมการ S-Curve เพื่อความสมูท
+                    const smoothStep = (t) => t * t * (3 - 2 * t);
+
+                    // ทางลาดขึ้น (Ramp Up)
+                    if (currentDist >= start - rampLen && currentDist < start) {
+                        let progress = (currentDist - (start - rampLen)) / rampLen;
+                        return 0.1 + (maxH - 0.1) * smoothStep(progress);
+                    }
+                    
+                    // ทางลาดลง (Ramp Down)
+                    if (currentDist > end && currentDist <= end + rampLen) {
+                        let progress = 1.0 - ((currentDist - end) / rampLen);
+                        return 0.1 + (maxH - 0.1) * smoothStep(progress);
+                    }
+                }
+                return h;
+            }
+
+            function generateCrossRoads3D(steps) {
+                const crossRoadFeatures = [];
+                steps.forEach(step => {
+                    if (!step.intersections) return;
+                    step.intersections.forEach(intersect => {
+                        if (intersect.bearings.length > 2) {
+                            // สร้างถนนเส้นอื่น (Cross-roads) ที่ตัดผ่าน
+                            // ถนนพวกนี้จะเป็น 3D เลเยอร์ระดับ 0 (ติดพื้น) เพื่อให้สะพานหลักข้ามผ่านได้สวยๆ
+                            intersect.bearings.forEach(bearing => {
+                                // ข้ามทิศทางที่เป็นของเส้นทางหลัก (in/out)
+                                if (bearing === intersect.in || bearing === intersect.out) return;
+                                
+                                const center = intersect.location;
+                                // สร้างเส้นถนนปลอมยื่นออกไปทิศทางละ 50 เมตร
+                                const dest = turf.destination(center, 50, bearing, {units: 'meters'});
+                                const crossLine = turf.lineString([center, dest.geometry.coordinates]);
+                                const crossPoly = turf.buffer(crossLine, 4, {units: 'meters'});
+                                
+                                crossPoly.properties = { height: 0.5, base: 0 }; // ถนนตัดผ่านสูงจากพื้นนิดเดียว
+                                crossRoadFeatures.push(crossPoly);
+                            });
+                        }
+                    });
+                });
+                return crossRoadFeatures;
+            }
+
+            function drawUltimate3DRoute(routeData) {
+                const coords = routeData.geometry.coordinates;
+                const steps = routeData.legs[0].steps;
+                const routeLine = turf.lineString(coords);
+                const totalDistance = turf.length(routeLine, { units: 'meters' });
+
+                // คำนวณช่วงที่ต้องยกเป็นสะพาน
+                const bridgeZones = calculateElevationProfile(routeLine, steps);
+
+                const slices = [];
+                const pillars = [];
+                
+                // เดินตามเส้นทางทุกๆ 2 เมตร เพื่อสกัด 3D แบบเนียนกริบ
+                const resolution = 2; 
+                let prevPt = turf.along(routeLine, 0, {units:'meters'}).geometry.coordinates;
+                let prevHeight = getSmoothHeight(0, bridgeZones);
+
+                for (let d = resolution; d <= totalDistance + resolution; d += resolution) {
+                    let curDist = Math.min(d, totalDistance);
+                    let curPt = turf.along(routeLine, curDist, {units:'meters'}).geometry.coordinates;
+                    let curHeight = getSmoothHeight(curDist, bridgeZones);
+
+                    // สร้างแผ่นถนน 3D 1 แผ่น (กว้าง 8 เมตร)
+                    let segment = turf.lineString([prevPt, curPt]);
+                    let poly = turf.buffer(segment, 4, {units: 'meters'});
+                    
+                    // ป้องกันการแหว่งเวลามีทางโค้ง
+                    poly.properties = { height: curHeight, base: Math.max(0, curHeight - 1.5) };
+                    slices.push(poly);
+
+                    // สร้างตอม่อเฉพาะช่วงที่สะพานสูงเกิน 5 เมตร และสร้างทุกๆ 30 เมตร
+                    if (curDist % 30 < resolution && curHeight > 5) {
+                        let pillar = turf.buffer(turf.point(curPt), 1.5, {units: 'meters'});
+                        pillar.properties = { height: curHeight - 1.5, base: 0 };
+                        pillars.push(pillar);
+                    }
+
+                    prevPt = curPt;
+                    prevHeight = curHeight;
+                }
+
+                // สร้างถนนสายอื่นๆ ที่เป็นจุดตัด
+                const crossRoads = generateCrossRoads3D(steps);
+
+                // ลบเลเยอร์เก่า
+                ['skyway-route', 'skyway-pillars', 'cross-roads'].forEach(id => {
+                    if (map.getLayer(id)) map.removeLayer(id);
+                    if (map.getSource(id)) map.removeSource(id);
+                });
+
+                // 1. ถนนเส้นอื่นๆ (อยู่ด้านล่าง)
+                if (crossRoads.length > 0) {
+                    map.addSource('cross-roads', { type: 'geojson', data: turf.featureCollection(crossRoads) });
+                    map.addLayer({
+                        'id': 'cross-roads', 'type': 'fill-extrusion', 'source': 'cross-roads',
+                        'paint': { 'fill-extrusion-color': '#1e293b', 'fill-extrusion-height': 0.5, 'fill-extrusion-opacity': 0.8 }
+                    });
+                }
+
+                // 2. ตอม่อ
+                if (pillars.length > 0) {
+                    map.addSource('skyway-pillars', { type: 'geojson', data: turf.featureCollection(pillars) });
+                    map.addLayer({
+                        'id': 'skyway-pillars', 'type': 'fill-extrusion', 'source': 'skyway-pillars',
+                        'paint': { 'fill-extrusion-color': '#334155', 'fill-extrusion-height': ['get','height'], 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.9 }
+                    });
+                }
+
+                // 3. เส้นทางหลัก (ลอยข้าม)
+                map.addSource('skyway-route', { type: 'geojson', data: turf.featureCollection(slices) });
+                map.addLayer({
+                    'id': 'skyway-route', 'type': 'fill-extrusion', 'source': 'skyway-route',
+                    'paint': { 'fill-extrusion-color': '#00F2FE', 'fill-extrusion-height': ['get','height'], 'fill-extrusion-base': ['get','base'], 'fill-extrusion-opacity': 0.95 }
+                });
+            }
+
+            // =========================================================================
+            // การดึงข้อมูลและแสดงผล
+            // =========================================================================
+            async function buildSmartRoute() {
+                const o = oMarker.getLngLat(); const d = dMarker.getLngLat();
+                document.getElementById('loading-overlay').style.display = 'flex';
+                turnMarkers.forEach(m => m.remove()); turnMarkers = [];
+
+                try {
+                    const url = `https://router.project-osrm.org/route/v1/driving/${o.lng},${o.lat};${d.lng},${d.lat}?overview=full&geometries=geojson&steps=true`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    
+                    if(data.code === "Ok" && data.routes.length > 0) {
+                        const route = data.routes[0];
+                        currentRouteCoords = route.geometry.coordinates;
+
+                        // อัปเดตข้อมูลป้าย
+                        document.getElementById('route-info').style.display = 'block';
+                        document.getElementById('route-details').innerHTML = `<i class="ph-fill ph-path"></i> ระยะทาง ${(route.distance/1000).toFixed(1)} กม. | เวลา ~${Math.round(route.duration/60)} นาที`;
+                        
+                        let stepsHtml = "";
+                        route.legs[0].steps.forEach((step, idx) => {
+                            let thInst = step.maneuver.type === "turn" ? `เลี้ยว${step.maneuver.modifier.includes('left') ? 'ซ้าย' : 'ขวา'}` : "ขับตรงไป";
+                            if(step.maneuver.type === "depart") thInst = "เริ่มต้นเดินทาง";
+                            if(step.maneuver.type === "arrive") thInst = "ถึงจุดหมาย";
+                            if(step.name) thInst += ` ไปยัง ${step.name}`;
+
+                            stepsHtml += `<div class="step-item"><div class="step-num">${idx+1}</div><div>${thInst}</div></div>`;
+
+                            // จุดเลี้ยว
+                            if (step.maneuver.type === "turn" && idx < route.legs[0].steps.length - 1) {
+                                const el = document.createElement('div'); el.className = 'turn-marker';
+                                const popup = new maplibregl.Popup({ offset: 15, closeButton: false }).setHTML(`<div style="padding:5px;"><b>${thInst}</b></div>`);
+                                turnMarkers.push(new maplibregl.Marker({element: el}).setLngLat(step.maneuver.location).setPopup(popup).addTo(map));
                             }
                         });
-                    }
-                }
+                        document.getElementById('route-steps').innerHTML = stepsHtml;
 
-                async function triggerRouting() {
-                    const o = originMarker.getLngLat();
-                    const d = destMarker.getLngLat();
-
-                    document.getElementById('loading-overlay').style.display = 'flex';
-                    turnMarkers.forEach(m => m.remove()); turnMarkers = [];
-                    document.getElementById('start-journey-btn').style.display = 'none';
-
-                    try {
-                        const routeData = await fetchRouteFromOSRM(o.lng, o.lat, d.lng, d.lat);
-                        
-                        if(routeData.code === "Ok" && routeData.routes.length > 0) {
-                            const route = routeData.routes[0];
-                            currentRouteCoords = route.geometry.coordinates;
-
-                            const distanceKm = (route.distance / 1000).toFixed(2);
-                            const durationMin = Math.round(route.duration / 60);
-                            document.getElementById('route-info').style.display = 'block';
-                            document.getElementById('route-details').innerHTML = `<i class="ph-fill ph-path"></i> ระยะทาง ${distanceKm} กม. | เวลา ~${durationMin} นาที`;
-                            
-                            let stepsHtml = "";
-                            route.legs[0].steps.forEach((step, index) => {
-                                let type = step.maneuver.type;
-                                let modifier = step.maneuver.modifier;
-                                let thInst = `ขับตรงไปตามทาง`;
-                                if(type === "turn") thInst = `เลี้ยว${modifier === 'left' || modifier === 'slight left' ? 'ซ้าย' : 'ขวา'}`;
-                                if(type === "depart") thInst = "เริ่มต้นจากจุดจอด";
-                                if(type === "arrive") thInst = "ถึงจุดหมายปลายทางแล้ว";
-                                if(step.name) thInst += ` ไปที่ ${step.name}`;
-
-                                stepsHtml += `<div class="step-item"><div class="step-num">${index+1}</div><div>${thInst}</div></div>`;
-
-                                if((type === "turn" || type === "arrive") && index > 0 && index < route.legs[0].steps.length - 1) {
-                                    const loc = step.maneuver.location;
-                                    const el = document.createElement('div'); el.className = 'turn-marker';
-                                    const popupHTML = `<div style="text-align:center;"><p style="font-size:14px; font-weight:600; margin: 0; color:#333;">${thInst}</p></div>`;
-                                    const popup = new maplibregl.Popup({ offset: 15, closeButton: false }).setHTML(popupHTML);
-                                    const marker = new maplibregl.Marker({element: el}).setLngLat(loc).setPopup(popup).addTo(map);
-                                    turnMarkers.push(marker);
-                                }
-                            });
-                            document.getElementById('route-steps').innerHTML = stepsHtml;
-
-                            // บินกล้องไปดูเส้นทาง
-                            const bounds = new maplibregl.LngLatBounds();
-                            currentRouteCoords.forEach(c => bounds.extend(c));
-                            map.fitBounds(bounds, { padding: {top: 60, bottom: 200, left: 60, right: 60}, pitch: 60, duration: 1500 });
-
-                            // วาดสะพาน 3D
-                            setTimeout(() => {
-                                requestAnimationFrame(() => {
-                                    buildSmoothFlyover3D(currentRouteCoords);
-                                    document.getElementById('loading-overlay').style.display = 'none';
-                                    document.getElementById('start-journey-btn').style.display = 'flex';
-                                });
-                            }, 1500);
-
-                        } else {
-                            alert("ไม่สามารถค้นหาเส้นทางระหว่างสองจุดนี้ได้");
-                            document.getElementById('loading-overlay').style.display = 'none';
-                        }
-                    } catch (error) {
-                        alert(error.message || "เกิดข้อผิดพลาดในการโหลดข้อมูล");
-                        document.getElementById('loading-overlay').style.display = 'none';
-                    }
-                }
-
-                // เมื่อแผนที่พร้อม ให้วาดเส้นทางเริ่มต้น
-                map.on('style.load', () => {
-                    setTimeout(triggerRouting, 1000);
-                });
-
-                // =========================================================================
-                // ปุ่มควบคุม UI
-                // =========================================================================
-                document.getElementById('start-journey-btn').addEventListener('click', () => {
-                    document.body.classList.add('locked-mode');
-                    document.getElementById('start-journey-btn').style.display = 'none';
-                    document.getElementById('toggle-instructions-btn').style.display = 'flex';
-                    
-                    // ปิดการลากหมุด
-                    originMarker.setDraggable(false);
-                    destMarker.setDraggable(false);
-                    
-                    if(currentRouteCoords && currentRouteCoords.length > 0) {
-                        const origin = currentRouteCoords[0];
-                        map.flyTo({ center: origin, zoom: 18.5, pitch: 80, bearing: map.getBearing() + 15, duration: 3000 });
-                    }
-                });
-
-                document.getElementById('toggle-instructions-btn').addEventListener('click', () => {
-                    const info = document.getElementById('route-info');
-                    const text = document.getElementById('toggle-text');
-                    const btnIcon = document.querySelector('#toggle-instructions-btn i');
-
-                    if (info.classList.contains('hidden-panel')) {
-                        info.classList.remove('hidden-panel'); 
-                        text.innerText = 'ซ่อนป้ายบอกทาง';
-                        btnIcon.className = 'ph-fill ph-map-trifold icon-gradient';
-                    } else {
-                        info.classList.add('hidden-panel'); 
-                        text.innerText = 'เปิดป้ายบอกทาง';
-                        btnIcon.className = 'ph-fill ph-map-trifold icon-gradient';
-                    }
-                });
-
-                document.getElementById('camera-toggle').addEventListener('click', () => {
-                    if(currentRouteCoords) {
+                        // โฟกัสแผนที่
                         const bounds = new maplibregl.LngLatBounds();
                         currentRouteCoords.forEach(c => bounds.extend(c));
-                        map.fitBounds(bounds, { padding: 100, pitch: 60, duration: 2000 });
-                    } else {
-                        map.easeTo({ pitch: 70, duration: 1000 });
-                    }
-                });
+                        map.fitBounds(bounds, { padding: 80, pitch: 60, duration: 1000 });
 
-            } catch (error) {
-                console.error("เกิดข้อผิดพลาดในการโหลดระบบ:", error);
+                        // รอให้กล้องขยับแป๊บนึง ค่อยเรนเดอร์ 3D เพื่อไม่ให้กระตุก
+                        setTimeout(() => {
+                            drawUltimate3DRoute(route);
+                            document.getElementById('loading-overlay').style.display = 'none';
+                            document.getElementById('start-journey-btn').style.display = 'flex';
+                        }, 1000);
+                    }
+                } catch (e) {
+                    alert("เกิดข้อผิดพลาดในการโหลดเส้นทาง");
+                    document.getElementById('loading-overlay').style.display = 'none';
+                }
             }
+
+            map.on('load', () => {
+                updateUI(); buildSmartRoute();
+            });
+
+            // UI Actions
+            document.getElementById('start-journey-btn').addEventListener('click', () => {
+                document.body.classList.add('locked-mode');
+                document.getElementById('start-journey-btn').style.display = 'none';
+                document.getElementById('toggle-instructions-btn').style.display = 'flex';
+                oMarker.setDraggable(false); dMarker.setDraggable(false);
+                
+                if(currentRouteCoords) map.flyTo({ center: currentRouteCoords[0], zoom: 18.5, pitch: 80, bearing: map.getBearing() + 15, duration: 3000 });
+            });
+
+            document.getElementById('toggle-instructions-btn').addEventListener('click', () => {
+                const info = document.getElementById('route-info');
+                if (info.classList.contains('hidden-panel')) {
+                    info.classList.remove('hidden-panel'); document.getElementById('search-container').style.display = 'flex';
+                    document.getElementById('toggle-text').innerText = 'ซ่อนป้ายบอกทาง';
+                } else {
+                    info.classList.add('hidden-panel'); document.getElementById('search-container').style.display = 'none';
+                    document.getElementById('toggle-text').innerText = 'เปิดป้ายบอกทาง';
+                }
+            });
+
+            document.getElementById('camera-toggle').addEventListener('click', () => {
+                if(currentRouteCoords) {
+                    const b = new maplibregl.LngLatBounds(); currentRouteCoords.forEach(c => b.extend(c));
+                    map.fitBounds(b, { padding: 100, pitch: 50, duration: 2000 });
+                }
+            });
+
         };
     </script>
 </body>
