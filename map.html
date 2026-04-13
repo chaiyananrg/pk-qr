@@ -2,244 +2,322 @@
 <html lang="th">
 <head>
     <meta charset="utf-8">
-    <title>Free Smart 3D Navigation (No Key)</title>
+    <title>Smart 3D Flyover Navigation</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     
-    <!-- นำเข้า MapLibre GL JS (ทางเลือกฟรีแทน Mapbox) -->
+    <!-- MapLibre GL JS (ฟรี, เสถียร, ไม่ต้องใช้ Key) -->
     <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
     <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 
-    <!-- Turf.js (สำหรับคำนวณสร้างโมเดลถนน 3D) -->
+    <!-- Turf.js (อัลกอริทึมคณิตศาสตร์สำหรับคำนวณความลาดชันและสร้าง 3D) -->
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 
-    <!-- Phosphor Icons -->
+    <!-- Phosphor Icons (ไอคอนสวยงามแบบเวกเตอร์) -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap');
 
-        body { margin: 0; padding: 0; font-family: 'Kanit', sans-serif; overflow: hidden; background-color: #000; }
+        body { margin: 0; padding: 0; font-family: 'Kanit', sans-serif; overflow: hidden; background-color: #0b0f19; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
 
         /* --- หน้าจอโหลดข้อมูล (Loading Screen) --- */
         #loading-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+            background: rgba(11, 15, 25, 0.9); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
             z-index: 9999; display: none; flex-direction: column; justify-content: center; align-items: center; color: #00F2FE;
         }
-        .spinner { width: 70px; height: 70px; border: 6px solid rgba(0, 242, 254, 0.1); border-top: 6px solid #00F2FE; border-bottom: 6px solid #4FACFE; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; box-shadow: 0 0 20px rgba(0, 242, 254, 0.5); }
+        .spinner { 
+            width: 80px; height: 80px; border: 4px solid rgba(0, 242, 254, 0.1); 
+            border-top: 4px solid #00F2FE; border-bottom: 4px solid #4FACFE; 
+            border-radius: 50%; animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite; 
+            box-shadow: 0 0 30px rgba(0, 242, 254, 0.4); margin-bottom: 25px; 
+        }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .loading-text { font-size: 20px; font-weight: 500; text-shadow: 0 0 10px rgba(0,242,254,0.5); margin: 0; }
-        .loading-subtext { font-size: 14px; color: #aaa; margin-top: 8px; }
+        .loading-text { font-size: 22px; font-weight: 600; text-shadow: 0 0 15px rgba(0,242,254,0.6); margin: 0; letter-spacing: 1px; }
+        .loading-subtext { font-size: 14px; color: #8892b0; margin-top: 10px; }
 
-        /* Glassmorphism Panels */
-        .glass-panel { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 16px; box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15); }
-        .dark-mode .glass-panel { background: rgba(20, 25, 35, 0.85); border: 1px solid rgba(255, 255, 255, 0.1); color: white; }
+        /* Glassmorphism UI */
+        .glass-panel { 
+            background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); 
+            border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; 
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); color: white;
+        }
 
         /* Gradient Icons */
-        .icon-gradient { background: linear-gradient(135deg, #FF007A, #7928CA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 24px; }
-        .dark-mode .icon-gradient { background: linear-gradient(135deg, #00F2FE, #4FACFE); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .icon-gradient { 
+            background: linear-gradient(135deg, #00F2FE, #4FACFE); 
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 24px; 
+        }
 
-        /* Controls */
+        /* UI Controls Layout */
+        #search-container { position: absolute; top: 20px; left: 20px; z-index: 2; width: 340px; display: flex; flex-direction: column; gap: 12px; }
+        .search-input { width: 100%; padding: 14px 16px; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; font-family: 'Kanit', sans-serif; font-size: 14px; outline: none; box-sizing: border-box; background: rgba(0,0,0,0.4); color: white; transition: all 0.3s; }
+        .search-input:focus { border-color: #00F2FE; box-shadow: 0 0 10px rgba(0,242,254,0.3); }
+        
         #ui-controls { position: absolute; bottom: 30px; left: 20px; z-index: 2; display: flex; flex-direction: column; gap: 12px; }
-        .action-btn { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 20px; border: none; cursor: pointer; font-family: 'Kanit', sans-serif; font-weight: 500; font-size: 15px; transition: all 0.3s ease; }
-        .action-btn:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
         
-        #start-journey-btn { background: linear-gradient(135deg, #00C9FF, #92FE9D); color: #000; font-weight: bold; display: none; animation: pulse 2s infinite; }
+        /* Buttons */
+        .action-btn { 
+            display: flex; align-items: center; justify-content: center; gap: 12px; 
+            padding: 14px 20px; border: none; cursor: pointer; 
+            font-family: 'Kanit', sans-serif; font-weight: 500; font-size: 15px; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+        }
+        .action-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 25px rgba(0,0,0,0.3); border-color: rgba(255,255,255,0.3); }
+        
+        #demo-btn { background: linear-gradient(135deg, #FF007A, #7928CA); color: white; border: none; font-weight: 600; }
+        #demo-btn .icon-gradient { background: none; -webkit-text-fill-color: white; }
+        
+        #start-journey-btn { 
+            background: linear-gradient(135deg, #00C9FF, #92FE9D); color: #000; font-weight: 700; display: none; 
+            animation: pulse-green 2s infinite; border: none;
+        }
         #start-journey-btn .icon-gradient { background: none; -webkit-text-fill-color: #000; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0.5); } 70% { box-shadow: 0 0 0 15px rgba(0, 201, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0); } }
+        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0.4); } 70% { box-shadow: 0 0 0 15px rgba(0, 201, 255, 0); } 100% { box-shadow: 0 0 0 0 rgba(0, 201, 255, 0); } }
 
-        /* Custom Search UI (เนื่องจากไม่ได้ใช้ Mapbox Directions) */
-        #search-container { position: absolute; top: 20px; left: 20px; z-index: 2; width: 320px; display: flex; flex-direction: column; gap: 10px; }
-        .search-input { width: 100%; padding: 12px 15px; border: none; border-radius: 12px; font-family: 'Kanit', sans-serif; font-size: 14px; outline: none; box-sizing: border-box; }
-        .dark-mode .search-input { background: rgba(0,0,0,0.5); color: white; border: 1px solid rgba(255,255,255,0.2); }
-        #route-info { display: none; padding: 15px; font-size: 14px; max-height: 200px; overflow-y: auto; }
-        
-        .locked-mode #search-container .search-input, .locked-mode #search-container .search-btn { display: none; }
+        /* Route Info Box */
+        #route-info { display: none; padding: 18px; font-size: 14px; max-height: 250px; overflow-y: auto; }
+        .step-item { padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); display: flex; gap: 10px; align-items: flex-start; }
+        .step-item:last-child { border-bottom: none; }
+        .step-num { background: rgba(0,242,254,0.2); color: #00F2FE; width: 22px; height: 22px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-size: 12px; font-weight: bold; flex-shrink: 0; }
+
+        /* Mode Locks */
+        .locked-mode #search-container { display: none; }
         .hidden-panel { display: none !important; }
 
         /* Turn Markers & Popups */
-        .turn-marker { width: 16px; height: 16px; background: linear-gradient(135deg, #FFD700, #FF8C00); border: 2px solid white; border-radius: 50%; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: transform 0.2s; }
-        .turn-marker:hover { transform: scale(1.3); }
-        .maplibregl-popup-content { border-radius: 12px; padding: 10px; font-family: 'Kanit', sans-serif; }
-        .dark-mode .maplibregl-popup-content { background: #1a2530; color: white; border: 1px solid rgba(255,255,255,0.1); }
-        .dark-mode .maplibregl-popup-tip { border-top-color: #1a2530; border-bottom-color: #1a2530; }
+        .turn-marker { width: 14px; height: 14px; background: #00F2FE; border: 2px solid white; border-radius: 50%; cursor: pointer; box-shadow: 0 0 15px #00F2FE; transition: all 0.3s; }
+        .turn-marker:hover { transform: scale(1.5); background: #FF007A; box-shadow: 0 0 20px #FF007A; }
+        .maplibregl-popup-content { background: rgba(15,23,42,0.95); backdrop-filter: blur(10px); border: 1px solid rgba(0,242,254,0.3); border-radius: 12px; padding: 12px; font-family: 'Kanit', sans-serif; color: white; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .maplibregl-popup-tip { border-top-color: rgba(15,23,42,0.95); }
 
         @media (max-width: 600px) {
             #search-container { width: calc(100% - 40px); }
-            #ui-controls { bottom: 15px; left: 10px; right: 55px; }
-            .action-btn { width: 100%; }
+            #ui-controls { bottom: 20px; left: 15px; right: 55px; }
+            .action-btn { width: 100%; justify-content: center; }
         }
     </style>
 </head>
-<body class="dark-mode">
+<body>
 
-    <!-- Loading Screen -->
+    <!-- หน้าจอ Loading อนิเมชั่นสุดล้ำ -->
     <div id="loading-overlay">
         <div class="spinner"></div>
-        <p class="loading-text">กำลังสร้างโครงสร้างสะพาน 3D</p>
-        <p class="loading-subtext">ประมวลผลเส้นทางด้วย OSRM...</p>
+        <p class="loading-text">กำลังวิเคราะห์ภูมิประเทศ</p>
+        <p class="loading-subtext" id="loading-status">คำนวณองศาความลาดชันและสร้างเสาตอม่อ 3D...</p>
     </div>
 
     <div id="map"></div>
 
-    <!-- UI ค้นหาสถานที่ทำเอง -->
+    <!-- UI ค้นหาและป้ายบอกทาง -->
     <div id="search-container">
-        <input type="text" id="origin-input" class="glass-panel search-input" placeholder="พิกัดเริ่มต้น (เช่น 100.523,13.733)">
-        <input type="text" id="dest-input" class="glass-panel search-input" placeholder="พิกัดปลายทาง (เช่น 100.539,13.746)">
+        <button id="demo-btn" class="glass-panel action-btn" style="width: 100%; border-radius: 12px;">
+            <i class="ph-fill ph-magic-wand icon-gradient"></i> สร้างทางยกระดับจำลอง (กดเพื่อดูผลงาน)
+        </button>
+        <input type="text" id="origin-input" class="glass-panel search-input" placeholder="พิกัดจุดเริ่มต้น (ละติจูด,ลองจิจูด)">
+        <input type="text" id="dest-input" class="glass-panel search-input" placeholder="พิกัดจุดหมาย (ละติจูด,ลองจิจูด)">
         <button id="search-btn" class="glass-panel action-btn" style="width: 100%;">
-            <i class="ph-fill ph-magnifying-glass icon-gradient"></i> ค้นหาเส้นทาง
+            <i class="ph-fill ph-magnifying-glass icon-gradient"></i> คำนวณเส้นทาง 3D
         </button>
         <div id="route-info" class="glass-panel">
-            <div id="route-details" style="font-weight: 600; margin-bottom: 10px; color: #00F2FE;"></div>
+            <div id="route-details" style="font-weight: 600; margin-bottom: 15px; color: #00F2FE; font-size: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px;"></div>
             <div id="route-steps"></div>
         </div>
     </div>
     
-    <!-- UI Controls -->
+    <!-- UI ควบคุมการนำทาง -->
     <div id="ui-controls">
         <button id="start-journey-btn" class="glass-panel action-btn">
-            <i class="ph-fill ph-rocket icon-gradient"></i> เริ่มการเดินทาง
+            <i class="ph-fill ph-car-profile icon-gradient"></i> นำทางมุมมองคนขับ 3D
         </button>
         <button id="toggle-instructions-btn" class="glass-panel action-btn" style="display: none;">
-            <i class="ph-fill ph-list-dashes icon-gradient"></i> <span id="toggle-text">ซ่อนป้ายบอกทาง</span>
+            <i class="ph-fill ph-map-trifold icon-gradient"></i> <span id="toggle-text">เปิดป้ายบอกทาง</span>
         </button>
         <button id="camera-toggle" class="glass-panel action-btn">
-            <i class="ph-fill ph-cube icon-gradient"></i> มุมมอง 3D นำทาง
-        </button>
-        <button id="theme-toggle" class="glass-panel action-btn">
-            <i class="ph-fill ph-sun icon-gradient" id="theme-icon"></i> <span id="theme-text">โหมดสว่าง</span>
+            <i class="ph-fill ph-cube icon-gradient"></i> คืนค่ามุมกล้องโดรน
         </button>
     </div>
 
     <script>
         window.onload = function() {
             try {
-                // ใช้สไตล์ฟรีจาก Maptiler (ไม่ต้องใช้คีย์สำหรับการทดสอบเบื้องต้น บางแหล่งอาจมีการจำกัดปริมาณ)
-                // เราใช้สไตล์พื้นฐานของ MapLibre ควบคู่กับข้อมูล OpenStreetMap
+                // ใช้ Base Map ฟรีจาก CartoDB (Dark Matter) สวยงาม โหลดไว ไม่ติดลิขสิทธิ์
                 const styleUrl = 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json';
-                const lightStyleUrl = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
-
-                let isDarkMode = true; 
+                
                 let turnMarkers = [];
                 let currentRouteCoords = null;
 
                 const map = new maplibregl.Map({
                     container: 'map',
                     style: styleUrl,
-                    zoom: 14, pitch: 65, bearing: -15,
-                    center: [100.523, 13.733] // สามย่าน/จุฬา กทม.
+                    zoom: 14, pitch: 70, bearing: -20,
+                    center: [100.536, 13.738] // บริเวณสยาม/ราชประสงค์ (เหมาะแก่การสร้างทางยกระดับข้ามแยก)
                 });
 
                 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'bottom-right');
 
-                // ฟังก์ชันดึงข้อมูลเส้นทางฟรีจาก OSRM (Open Source Routing Machine)
+                // ฟังก์ชันดึงข้อมูลเส้นทางฟรีจาก OSRM
                 async function fetchRouteFromOSRM(startLng, startLat, endLng, endLat) {
                     const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson&steps=true`;
                     const response = await fetch(osrmUrl);
-                    const data = await response.json();
-                    return data;
+                    return await response.json();
                 }
 
-                function render3DRouteOnMap(coords) {
+                // =========================================================================
+                // อัลกอริทึมวิศวกรรมสร้างทางยกระดับ 3D (The Core Geometry Logic)
+                // =========================================================================
+                function buildFlyover3D(coords) {
                     if (!coords || coords.length < 2) return;
 
-                    const line = turf.lineString(coords);
-                    const roadPolygon = turf.buffer(line, 4, { units: 'meters' }); 
+                    // 1. ทำให้เส้นทางเรียบเนียนขึ้น เพื่อไม่ให้สะพานหักมุมน่าเกลียด
+                    let rawLine = turf.lineString(coords);
+                    
+                    // หากเส้นทางสั้นเกินไป ไม่ต้องสร้างทางยกระดับ
+                    const routeLength = turf.length(rawLine, { units: 'meters' });
+                    if (routeLength < 100) return;
 
-                    const routeLength = turf.length(line, { units: 'meters' });
+                    // 2. หั่นเส้นทางออกเป็นชิ้นเล็กๆ (ทุกๆ 5 เมตร) เพื่อทำสโลปความลาดชัน
+                    const segmentLength = 5; // เมตร
+                    const features = [];
                     const pillars = [];
-                    if (routeLength > 60) {
-                        for (let i = 20; i < routeLength; i += 60) {
-                            const pt = turf.along(line, i, { units: 'meters' });
-                            pillars.push(turf.buffer(pt, 2, { units: 'meters' })); 
+                    
+                    const rampDistance = 300; // ระยะทางที่ใช้ไต่ระดับขึ้นและลง (เมตร)
+                    const maxAltitude = 20;   // จุดสูงสุดของสะพานลอยฟ้า (เมตร)
+                    const bridgeThickness = 1.5; // ความหนาของพื้นถนน (เมตร)
+
+                    for (let i = 0; i < routeLength; i += segmentLength) {
+                        // คำนวณจุดตัดแต่ละท่อน
+                        let p1 = turf.along(rawLine, i, { units: 'meters' });
+                        let p2 = turf.along(rawLine, Math.min(i + segmentLength, routeLength), { units: 'meters' });
+                        
+                        // สร้างถนน 1 ท่อน (กว้าง 6 เมตร = รัศมี 3)
+                        let segmentLine = turf.lineString([p1.geometry.coordinates, p2.geometry.coordinates]);
+                        let segmentPolygon = turf.buffer(segmentLine, 3, { units: 'meters' });
+
+                        // --- สมการคำนวณความสูงแบบลาดเอียง ---
+                        let currentHeight = maxAltitude;
+                        let distanceFromEnd = routeLength - i;
+
+                        if (i < rampDistance) {
+                            // ช่วงขาขึ้น (ค่อยๆ ไต่ระดับจาก 0 ไป maxAltitude)
+                            // ใช้สมการ sine wave เบาๆ เพื่อให้โค้งมน ไม่หักศอก
+                            let progress = i / rampDistance;
+                            currentHeight = maxAltitude * progress;
+                        } else if (distanceFromEnd < rampDistance) {
+                            // ช่วงขาลง (ค่อยๆ ต่ำลงจนถึงพื้น)
+                            let progress = distanceFromEnd / rampDistance;
+                            currentHeight = maxAltitude * progress;
+                        }
+
+                        // ป้องกันความสูงติดลบ
+                        if (currentHeight < 0.2) currentHeight = 0.2;
+                        let baseHeight = Math.max(0, currentHeight - bridgeThickness);
+
+                        // แนบ Properties เพื่อให้ MapLibre วาด 3D
+                        segmentPolygon.properties = {
+                            height: currentHeight,
+                            base: baseHeight
+                        };
+                        features.push(segmentPolygon);
+
+                        // --- การสร้างเสาตอม่อ (Pillars) ---
+                        // วางเสาทุกๆ 40 เมตร และวางเฉพาะตอนที่สะพานสูงกว่า 5 เมตรเท่านั้น (ไม่วางตรงตีนสะพาน)
+                        if (i > 0 && i % 40 === 0 && currentHeight > 5) {
+                            let pillar = turf.buffer(p1, 1.2, { units: 'meters' }); // รัศมีเสา 1.2 เมตร
+                            pillar.properties = {
+                                height: baseHeight, // เสาสูงไปชนใต้ท้องสะพานพอดี
+                                base: 0             // เสาปักที่พื้น
+                            };
+                            pillars.push(pillar);
                         }
                     }
 
-                    if (map.getLayer('custom-3d-route')) map.removeLayer('custom-3d-route');
-                    if (map.getSource('custom-3d-route')) map.removeSource('custom-3d-route');
-                    if (map.getLayer('custom-3d-pillars')) map.removeLayer('custom-3d-pillars');
-                    if (map.getSource('custom-3d-pillars')) map.removeSource('custom-3d-pillars');
+                    // 3. นำชิ้นส่วนทั้งหมดเข้าสู่แผนที่
+                    if (map.getLayer('skyway-route')) map.removeLayer('skyway-route');
+                    if (map.getSource('skyway-route')) map.removeSource('skyway-route');
+                    if (map.getLayer('skyway-pillars')) map.removeLayer('skyway-pillars');
+                    if (map.getSource('skyway-pillars')) map.removeSource('skyway-pillars');
 
-                    map.addSource('custom-3d-route', { type: 'geojson', data: roadPolygon });
+                    // วาดผิวถนน 3D
+                    map.addSource('skyway-route', { type: 'geojson', data: turf.featureCollection(features) });
                     map.addLayer({
-                        'id': 'custom-3d-route', 'type': 'fill-extrusion', 'source': 'custom-3d-route',
+                        'id': 'skyway-route',
+                        'type': 'fill-extrusion',
+                        'source': 'skyway-route',
                         'paint': {
-                            'fill-extrusion-color': '#00F2FE', 
-                            'fill-extrusion-height': 16, 
-                            'fill-extrusion-base': 15, 
+                            // ไล่สีฟ้าสดใส (นีออน) สะท้อนความเป็นล้ำสมัย
+                            'fill-extrusion-color': '#00F2FE',
+                            'fill-extrusion-height': ['get', 'height'],
+                            'fill-extrusion-base': ['get', 'base'],
                             'fill-extrusion-opacity': 0.95
                         }
                     });
 
+                    // วาดเสาตอม่อ 3D
                     if (pillars.length > 0) {
-                        map.addSource('custom-3d-pillars', { type: 'geojson', data: turf.featureCollection(pillars) });
+                        map.addSource('skyway-pillars', { type: 'geojson', data: turf.featureCollection(pillars) });
                         map.addLayer({
-                            'id': 'custom-3d-pillars', 'type': 'fill-extrusion', 'source': 'custom-3d-pillars',
+                            'id': 'skyway-pillars',
+                            'type': 'fill-extrusion',
+                            'source': 'skyway-pillars',
                             'paint': {
-                                'fill-extrusion-color': isDarkMode ? '#475569' : '#94a3b8',
-                                'fill-extrusion-height': 15, 'fill-extrusion-base': 0, 'fill-extrusion-opacity': 0.9
+                                'fill-extrusion-color': '#334155', // สีคอนกรีตเข้มๆ
+                                'fill-extrusion-height': ['get', 'height'],
+                                'fill-extrusion-base': ['get', 'base'],
+                                'fill-extrusion-opacity': 0.8
                             }
                         });
                     }
                 }
 
-                map.on('style.load', () => {
-                    // หากมีเส้นทางค้างอยู่ ให้สร้าง 3D กลับมาใหม่
-                    if(currentRouteCoords) {
-                        render3DRouteOnMap(currentRouteCoords);
-                    }
-                });
-
-                // การค้นหาเส้นทาง
-                document.getElementById('search-btn').addEventListener('click', async () => {
-                    const originVal = document.getElementById('origin-input').value;
-                    const destVal = document.getElementById('dest-input').value;
-
-                    // ค่าเริ่มต้นหากไม่ได้กรอก (ทดสอบ: จากสามย่าน ไป เซ็นทรัลเวิลด์)
-                    const start = originVal ? originVal.split(',') : [100.523, 13.733];
-                    const end = destVal ? destVal.split(',') : [100.539, 13.746];
-
+                // =========================================================================
+                // ระบบหลัก: การค้นหาเส้นทางและการแสดงผล
+                // =========================================================================
+                async function processRouting(startCoords, endCoords) {
                     document.getElementById('loading-overlay').style.display = 'flex';
                     turnMarkers.forEach(m => m.remove()); turnMarkers = [];
 
                     try {
-                        const routeData = await fetchRouteFromOSRM(start[0], start[1], end[0], end[1]);
+                        const routeData = await fetchRouteFromOSRM(startCoords[0], startCoords[1], endCoords[0], endCoords[1]);
                         
                         if(routeData.code === "Ok" && routeData.routes.length > 0) {
                             const route = routeData.routes[0];
                             currentRouteCoords = route.geometry.coordinates;
 
-                            // แสดงข้อมูลระยะทาง
+                            // แสดงข้อมูลสรุป
                             const distanceKm = (route.distance / 1000).toFixed(2);
                             const durationMin = Math.round(route.duration / 60);
                             document.getElementById('route-info').style.display = 'block';
-                            document.getElementById('route-details').innerText = `ระยะทาง: ${distanceKm} กม. | เวลา: ${durationMin} นาที`;
+                            document.getElementById('route-details').innerHTML = `<i class="ph-fill ph-path"></i> ระยะทาง ${distanceKm} กม. | ใช้เวลา ~${durationMin} นาที`;
                             
+                            // เปลี่ยนภาษาบอกทางเป็นไทย
                             let stepsHtml = "";
                             const steps = route.legs[0].steps;
                             steps.forEach((step, index) => {
-                                // เปลี่ยนคำภาษาอังกฤษจาก OSRM เป็นไทยเบื้องต้น
                                 let type = step.maneuver.type;
                                 let modifier = step.maneuver.modifier;
-                                let thInst = `ขับไปตามทาง`;
-                                if(type === "turn") thInst = `เลี้ยว${modifier === 'left' ? 'ซ้าย' : 'ขวา'}`;
-                                if(type === "depart") thInst = "เริ่มต้นการเดินทาง";
-                                if(type === "arrive") thInst = "ถึงจุดหมาย";
-                                if(step.name) thInst += ` ไปที่ ${step.name}`;
+                                let thInst = `ขับตรงไปตามทาง`;
+                                if(type === "turn") thInst = `เลี้ยว${modifier === 'left' || modifier === 'slight left' ? 'ซ้าย' : 'ขวา'}`;
+                                if(type === "depart") thInst = "เริ่มต้นจากจุดจอด";
+                                if(type === "arrive") thInst = "ถึงจุดหมายปลายทางแล้ว";
+                                if(step.name) thInst += ` ไปยังถนน ${step.name}`;
 
-                                stepsHtml += `<div style="padding:5px 0; border-bottom:1px solid rgba(128,128,128,0.3);">${index+1}. ${thInst}</div>`;
+                                stepsHtml += `
+                                    <div class="step-item">
+                                        <div class="step-num">${index+1}</div>
+                                        <div>${thInst}</div>
+                                    </div>
+                                `;
 
-                                // วาดจุดเลี้ยวบนแผนที่ (ถ้าไม่ใช่เส้นตรงยาวๆ)
-                                if(type === "turn" || type === "depart" || type === "arrive") {
+                                // วาดจุด Pop-up เลี้ยว
+                                if((type === "turn" || type === "arrive") && index > 0 && index < steps.length - 1) {
                                     const loc = step.maneuver.location;
                                     const el = document.createElement('div'); el.className = 'turn-marker';
-                                    
-                                    // เนื่องจากไม่ได้ใช้ Mapbox จึงไม่มี Static Image API ฟรีที่คุณภาพสูง
-                                    // จึงแสดงแค่ข้อความคำแนะนำแบบ 3D
                                     const popupHTML = `
                                         <div style="text-align:center;">
-                                            <p style="font-size:14px; font-weight:600; margin: 0; color:#333;">${thInst}</p>
+                                            <i class="ph-fill ph-arrow-u-down-right icon-gradient" style="font-size:32px;"></i>
+                                            <p style="font-size:15px; font-weight:600; margin: 8px 0 0 0;">${thInst}</p>
                                         </div>
                                     `;
                                     const popup = new maplibregl.Popup({ offset: 15, closeButton: false }).setHTML(popupHTML);
@@ -249,68 +327,99 @@
                             });
                             document.getElementById('route-steps').innerHTML = stepsHtml;
 
-                            // บินกล้องไปดูเส้นทางรวม
+                            // ซูมกล้องให้เห็นเส้นทางทั้งหมด
                             const bounds = new maplibregl.LngLatBounds();
                             currentRouteCoords.forEach(c => bounds.extend(c));
-                            map.fitBounds(bounds, { padding: 50, pitch: 65 });
+                            map.fitBounds(bounds, { padding: {top: 50, bottom: 200, left: 50, right: 50}, pitch: 65, duration: 1500 });
 
+                            // รอให้กล้องหมุนเสร็จนิดนึง ค่อยคำนวณวาดสะพาน 3D
                             setTimeout(() => {
-                                render3DRouteOnMap(currentRouteCoords);
-                                document.getElementById('loading-overlay').style.display = 'none';
-                                document.getElementById('start-journey-btn').style.display = 'flex';
-                            }, 500);
+                                document.getElementById('loading-status').innerText = "กำลังสร้างผิวจราจร 3 มิติ...";
+                                // บังคับให้เบราว์เซอร์เตรียมตัวประมวลผลหนัก
+                                requestAnimationFrame(() => {
+                                    buildFlyover3D(currentRouteCoords);
+                                    document.getElementById('loading-overlay').style.display = 'none';
+                                    document.getElementById('start-journey-btn').style.display = 'flex';
+                                });
+                            }, 1500);
 
                         } else {
                             alert("ไม่สามารถค้นหาเส้นทางได้ กรุณาตรวจสอบพิกัด");
                             document.getElementById('loading-overlay').style.display = 'none';
                         }
-
                     } catch (error) {
                         console.error("Error fetching route:", error);
-                        alert("เกิดข้อผิดพลาดในการเชื่อมต่อระบบนำทาง");
+                        alert("เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์");
                         document.getElementById('loading-overlay').style.display = 'none';
+                    }
+                }
+
+                // =========================================================================
+                // การกดปุ่มต่างๆ
+                // =========================================================================
+
+                // ปุ่มเวทมนตร์: สาธิตสร้างเส้นทางข้ามแยกปทุมวัน ไปแยกราชประสงค์
+                document.getElementById('demo-btn').addEventListener('click', () => {
+                    document.getElementById('origin-input').value = "100.528, 13.746"; // ถ.พระราม 1 แถวสนามกีฬา
+                    document.getElementById('dest-input').value = "100.543, 13.743";   // แถวสวนลุม
+                    processRouting([100.528, 13.746], [100.543, 13.743]);
+                });
+
+                document.getElementById('search-btn').addEventListener('click', () => {
+                    const originVal = document.getElementById('origin-input').value.split(',');
+                    const destVal = document.getElementById('dest-input').value.split(',');
+                    if(originVal.length === 2 && destVal.length === 2) {
+                        processRouting([parseFloat(originVal[0]), parseFloat(originVal[1])], [parseFloat(destVal[0]), parseFloat(destVal[1])]);
+                    } else {
+                        alert("กรุณากรอกพิกัดให้ถูกต้อง เช่น 100.5,13.7");
                     }
                 });
 
-                // --- UI Controls ---
                 document.getElementById('start-journey-btn').addEventListener('click', () => {
                     document.body.classList.add('locked-mode');
                     document.getElementById('start-journey-btn').style.display = 'none';
                     document.getElementById('toggle-instructions-btn').style.display = 'flex';
                     
                     if(currentRouteCoords && currentRouteCoords.length > 0) {
+                        // บินไปที่จุดเริ่มต้น กดกล้องต่ำ (Pitch 80) ซูมสุด ให้ความรู้สึกเหมือนกำลังขับรถอยู่ตีนสะพาน
                         const origin = currentRouteCoords[0];
-                        map.flyTo({ center: origin, zoom: 17.5, pitch: 75, duration: 2500 });
+                        map.flyTo({ center: origin, zoom: 18, pitch: 80, bearing: map.getBearing() + 45, duration: 3000 });
                     }
                 });
 
                 document.getElementById('toggle-instructions-btn').addEventListener('click', () => {
                     const info = document.getElementById('route-info');
                     const text = document.getElementById('toggle-text');
+                    const btnIcon = document.querySelector('#toggle-instructions-btn i');
+
                     if (info.classList.contains('hidden-panel')) {
-                        info.classList.remove('hidden-panel'); text.innerText = 'ซ่อนป้ายบอกทาง';
+                        // กดเพื่อแสดง
+                        info.classList.remove('hidden-panel'); 
+                        text.innerText = 'ซ่อนป้ายบอกทาง';
+                        btnIcon.className = 'ph-fill ph-map-trifold icon-gradient';
+                        document.getElementById('search-container').style.display = 'flex';
+                        document.getElementById('origin-input').style.display = 'none';
+                        document.getElementById('dest-input').style.display = 'none';
+                        document.getElementById('search-btn').style.display = 'none';
+                        document.getElementById('demo-btn').style.display = 'none';
                     } else {
-                        info.classList.add('hidden-panel'); text.innerText = 'แสดงป้ายบอกทาง';
-                    }
-                });
-
-                document.getElementById('theme-toggle').addEventListener('click', () => {
-                    isDarkMode = !isDarkMode;
-                    document.body.classList.toggle('dark-mode');
-                    const icon = document.getElementById('theme-icon');
-                    const text = document.getElementById('theme-text');
-
-                    if (isDarkMode) {
-                        map.setStyle(styleUrl);
-                        icon.className = 'ph-fill ph-sun icon-gradient'; text.innerText = 'โหมดสว่าง';
-                    } else {
-                        map.setStyle(lightStyleUrl);
-                        icon.className = 'ph-fill ph-moon-stars icon-gradient'; text.innerText = 'โหมดกลางคืน';
+                        // กดเพื่อซ่อน
+                        info.classList.add('hidden-panel'); 
+                        text.innerText = 'เปิดป้ายบอกทาง';
+                        btnIcon.className = 'ph-fill ph-map-trifold icon-gradient';
+                        document.getElementById('search-container').style.display = 'none';
                     }
                 });
 
                 document.getElementById('camera-toggle').addEventListener('click', () => {
-                    map.easeTo({ pitch: 65, duration: 1000 });
+                    // คืนค่ากล้องเป็นมุมมองโดรนมุมสูง มองเห็นสะพานทั้งเส้น
+                    if(currentRouteCoords) {
+                        const bounds = new maplibregl.LngLatBounds();
+                        currentRouteCoords.forEach(c => bounds.extend(c));
+                        map.fitBounds(bounds, { padding: 100, pitch: 60, duration: 2000 });
+                    } else {
+                        map.easeTo({ pitch: 70, duration: 1000 });
+                    }
                 });
 
             } catch (error) {
