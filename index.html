@@ -3,16 +3,136 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapbox - แผนที่ภาษาไทยพร้อมพื้นที่โฆษณา</title>
     
-    <!-- Google AdSense -->
-    <meta name="google-adsense-account" content="ca-pub-6353421573181252">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.css" rel="stylesheet">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden; /* ป้องกันการเลื่อนหน้าจอ */
+        }
 
-    <title>เว็บไซต์ของฉัน</title>
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0; /* หรือ bottom: 90px ถ้ายากให้แผนที่ไปหยุดแค่ขอบโฆษณา */
+            width: 100%;
+            z-index: 1;
+        }
+
+        /* ปุ่มสลับโหมด */
+        #theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 2;
+            padding: 12px 20px;
+            background-color: #ffffff;
+            color: #333;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        #theme-toggle:hover {
+            background-color: #f0f0f0;
+        }
+
+        /* โหมดปุ่มตอนเป็นแผนที่มืด */
+        #theme-toggle.dark-mode {
+            background-color: #333333;
+            color: #ffffff;
+        }
+
+        /* พื้นที่โฆษณา Google Ads ด้านล่าง */
+        #ad-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 90px; /* ความสูงของแบนเนอร์โฆษณา (ปรับได้) */
+            background-color: #f8f9fa;
+            z-index: 3; /* ให้ทับแผนที่และโลโก้ Mapbox ด้านล่าง */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-top: 2px solid #ddd;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+        }
+
+        .ad-placeholder-text {
+            color: #888;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
 
-    <h1>ยินดีต้อนรับสู่เว็บไซต์ของฉัน</h1>
-    <p>นี่คือหน้าเว็บตัวอย่าง</p>
+    <div id="map"></div>
 
+    <button id="theme-toggle">🌙 เปลี่ยนเป็นโหมดมืด</button>
+
+    <div id="ad-container">
+        <div class="ad-placeholder-text">
+            [พื้นที่สำหรับวางโค้ดโฆษณา Google Ads แนวนอน ขนาดเช่น 728x90]
+        </div>
+    </div>
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.2.0/mapbox-gl.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-language/v1.0.0/mapbox-gl-language.js"></script>
+
+    <script>
+        // ใส่ Access Token ของคุณ
+        mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhaXlhbmFuIiwiYSI6ImNtbndoeHlvbjA4ZHMycm9qajRyd3E5eGoifQ.Ua-_6wwmhrF0I6k-oZSfEg';
+
+        // ตั้งค่าเริ่มต้นของ Map (โหมดสว่าง)
+        const lightStyle = 'mapbox://styles/mapbox/streets-v12';
+        // ใช้โหมด navigation-night-v1 ซึ่งให้ฟีลลิ่งเข้มๆ คล้ายแผนที่ GPS นำทางในภาพของคุณ
+        const darkStyle = 'mapbox://styles/mapbox/navigation-night-v1';
+
+        const map = new mapboxgl.Map({
+            container: 'map', // id ของ div
+            style: lightStyle,
+            center: [100.5018, 13.7563], // พิกัดเริ่มต้น (กรุงเทพมหานคร)
+            zoom: 12
+        });
+
+        // เปิดใช้งานป้ายกำกับแผนที่เป็นภาษาไทยเป็นค่าเริ่มต้น
+        const languagePlugin = new MapboxLanguage({
+            defaultLanguage: 'th'
+        });
+        map.addControl(languagePlugin);
+
+        // ระบบสลับโหมด (Toggle)
+        let isDarkMode = false;
+        const toggleBtn = document.getElementById('theme-toggle');
+
+        toggleBtn.addEventListener('click', () => {
+            isDarkMode = !isDarkMode;
+            
+            if (isDarkMode) {
+                map.setStyle(darkStyle);
+                toggleBtn.innerHTML = '☀️ เปลี่ยนเป็นโหมดสว่าง';
+                toggleBtn.classList.add('dark-mode');
+            } else {
+                map.setStyle(lightStyle);
+                toggleBtn.innerHTML = '🌙 เปลี่ยนเป็นโหมดมืด';
+                toggleBtn.classList.remove('dark-mode');
+            }
+        });
+
+        // เมื่อมีการเปลี่ยนสไตล์แผนที่ ต้องบังคับให้ปลั๊กอินภาษาทำงานซ้ำ เพื่อให้เป็นภาษาไทยเสมอ
+        map.on('style.load', () => {
+            languagePlugin.setLanguage(map, 'th');
+        });
+    </script>
 </body>
 </html>
