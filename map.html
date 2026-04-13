@@ -2,14 +2,13 @@
 <html lang="th">
 <head>
     <meta charset="utf-8">
-    <title>Guides - Mapbox Globe (TH & Dark/Light Mode)</title>
+    <title>Mapbox - Light & Dark Mode</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     
+    <!-- ใช้ Mapbox GL JS v2.15.0 เพื่อรองรับการทำงานในหน้าต่างพรีวิว -->
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
     
-    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-language/v1.0.0/mapbox-gl-language.js"></script>
-
     <style>
         body { margin: 0; padding: 0; background-color: #111; font-family: sans-serif; }
         #map { position: absolute; top: 0; bottom: 0; width: 100%; }
@@ -22,13 +21,13 @@
             z-index: 1;
             background-color: #ffffff;
             color: #333333;
-            border: none;
+            border: 1px solid #ccc;
             padding: 10px 16px;
             border-radius: 8px;
             font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             transition: all 0.3s ease;
         }
         #theme-toggle:hover {
@@ -36,72 +35,77 @@
             transform: translateY(-2px);
         }
         
-        /* ปุ่มเมื่ออยู่ในโหมดมืด (ปุ่มจะเปลี่ยนเป็นสีเข้ม) */
+        /* สไตล์ปุ่มเมื่ออยู่ในโหมดมืด */
         .dark-btn {
-            background-color: #333333 !important;
+            background-color: #222222 !important;
             color: #ffffff !important;
+            border: 1px solid #444 !important;
         }
         .dark-btn:hover {
-            background-color: #444444 !important;
+            background-color: #333333 !important;
         }
     </style>
 </head>
 <body>
     <div id="map"></div>
-    <button id="theme-toggle">🌙 โหมดมืด</button>
+    <button id="theme-toggle">🌙 เปลี่ยนเป็นโหมดมืด</button>
 
     <script>
         window.onload = function() {
-            mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhaXlhbmFuIiwiYSI6ImNtbndoeHlvbjA4ZHMycm9qajRyd3E5eGoifQ.Ua-_6wwmhrF0I6k-oZSfEg';
-            
-            // สไตล์เริ่มต้น (โหมดสว่าง)
-            const lightStyle = 'mapbox://styles/mapbox/light-v11';
-            const darkStyle = 'mapbox://styles/mapbox/dark-v11';
-            let isDarkMode = false;
-
-            const map = new mapboxgl.Map({
-                container: 'map',
-                style: lightStyle, 
-                projection: 'globe', 
-                zoom: 2, 
-                center: [100.5, 15] // ศูนย์กลางประเทศไทย
-            });
-
-            // เพิ่ม Plugin ภาษาไทย
-            // ปลั๊กอินนี้จะพยายามค้นหา field 'name_th' ในข้อมูลและนำมาแสดงผล
-            const languagePlugin = new MapboxLanguage({
-                defaultLanguage: 'th'
-            });
-            map.addControl(languagePlugin);
-
-            map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-            map.scrollZoom.disable();
-
-            map.on('style.load', () => {
-                // ตั้งค่าบรรยากาศ (Fog) ให้เข้ากับลูกโลก
-                map.setFog({
-                    'color': 'rgb(186, 210, 235)', 
-                    'high-color': 'rgb(36, 92, 223)', 
-                    'space-color': isDarkMode ? 'rgb(11, 11, 25)' : 'rgb(200, 210, 220)',
-                    'star-intensity': isDarkMode ? 0.6 : 0.0
-                }); 
-            });
-
-            // ระบบจัดการปุ่มสลับโหมด
-            const toggleBtn = document.getElementById('theme-toggle');
-            toggleBtn.addEventListener('click', () => {
-                isDarkMode = !isDarkMode;
+            try {
+                mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhaXlhbmFuIiwiYSI6ImNtbndoeHlvbjA4ZHMycm9qajRyd3E5eGoifQ.Ua-_6wwmhrF0I6k-oZSfEg';
                 
-                if (isDarkMode) {
-                    map.setStyle(darkStyle);
-                    toggleBtn.innerText = '☀️ โหมดสว่าง';
-                    toggleBtn.classList.add('dark-btn');
-                } else {
-                    map.setStyle(lightStyle);
-                    toggleBtn.innerText = '🌙 โหมดมืด';
-                    toggleBtn.classList.remove('dark-btn');
+                // กำหนดรูปแบบแผนที่ (Street = โหมดสว่างสีครบถ้วน, Dark = โหมดมืด)
+                const lightStyle = 'mapbox://styles/mapbox/streets-v12';
+                const darkStyle = 'mapbox://styles/mapbox/dark-v11';
+                let isDarkMode = false;
+
+                const map = new mapboxgl.Map({
+                    container: 'map',
+                    style: lightStyle, // เริ่มต้นด้วยโหมดสว่าง
+                    projection: 'globe', // มุมมองลูกโลก
+                    zoom: 2, 
+                    center: [100.5, 15] // ศูนย์กลางประเทศไทย
+                });
+
+                // เพิ่มปุ่มซูมและเข็มทิศ
+                map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+                map.scrollZoom.disable(); // ปิดการซูมด้วยลูกกลิ้งเมาส์
+
+                // ฟังก์ชันตั้งค่าชั้นบรรยากาศ (Fog) ให้สีเข้ากับโหมด
+                function updateFog() {
+                    map.setFog({
+                        'color': 'rgb(186, 210, 235)', 
+                        'high-color': 'rgb(36, 92, 223)', 
+                        'space-color': isDarkMode ? 'rgb(11, 11, 25)' : 'rgb(220, 230, 240)',
+                        'star-intensity': isDarkMode ? 0.8 : 0.0
+                    });
                 }
-            });
+
+                // เมื่อแผนที่หรือสไตล์โหลดเสร็จ ให้แสดงชั้นบรรยากาศ
+                map.on('style.load', () => {
+                    updateFog();
+                });
+
+                // การทำงานของปุ่มสลับโหมด
+                const toggleBtn = document.getElementById('theme-toggle');
+                toggleBtn.addEventListener('click', () => {
+                    isDarkMode = !isDarkMode;
+                    
+                    if (isDarkMode) {
+                        map.setStyle(darkStyle);
+                        toggleBtn.innerText = '☀️ เปลี่ยนเป็นโหมดสว่าง';
+                        toggleBtn.classList.add('dark-btn');
+                    } else {
+                        map.setStyle(lightStyle);
+                        toggleBtn.innerText = '🌙 เปลี่ยนเป็นโหมดมืด';
+                        toggleBtn.classList.remove('dark-btn');
+                    }
+                });
+
+            } catch (error) {
+                console.error("เกิดข้อผิดพลาดในการโหลดแผนที่:", error);
+            }
         };
     </script>
 </body>
