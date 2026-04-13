@@ -2,12 +2,15 @@
 <html lang="th">
 <head>
     <meta charset="utf-8">
-    <title>Mapbox - Light & Dark Mode (With Colors)</title>
+    <title>Mapbox - Thai Language & Dark/Light Mode</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
     
-    <!-- ใช้ Mapbox GL JS v2.15.0 เพื่อรองรับการทำงานในหน้าต่างพรีวิว -->
+    <!-- Mapbox GL JS v2.15.0 -->
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    
+    <!-- นำเข้า Mapbox GL Language Plugin -->
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-language/v1.0.0/mapbox-gl-language.js"></script>
     
     <style>
         body { margin: 0; padding: 0; background-color: #111; font-family: sans-serif; }
@@ -37,7 +40,7 @@
         
         /* สไตล์ปุ่มเมื่ออยู่ในโหมดมืด */
         .dark-btn {
-            background-color: #1a2530 !important; /* เปลี่ยนสีปุ่มให้เข้ากับโทน Navigation Night */
+            background-color: #1a2530 !important;
             color: #ffffff !important;
             border: 1px solid #334155 !important;
         }
@@ -55,30 +58,35 @@
             try {
                 mapboxgl.accessToken = 'pk.eyJ1IjoiY2hhaXlhbmFuIiwiYSI6ImNtbndoeHlvbjA4ZHMycm9qajRyd3E5eGoifQ.Ua-_6wwmhrF0I6k-oZSfEg';
                 
-                // โหมดสว่างใช้สไตล์ปกติ (ถนนสีขาว/เทา ต้นไม้เขียว น้ำฟ้าสว่าง)
+                // โหมดสว่างใช้สไตล์ streets (ถนนเทา ต้นไม้เขียว น้ำฟ้า)
                 const lightStyle = 'mapbox://styles/mapbox/streets-v12';
-                
-                // โหมดมืดเปลี่ยนมาใช้ Navigation Night (ถนนมืด ต้นไม้เขียวเข้ม น้ำฟ้าเข้ม)
+                // โหมดมืดใช้ navigation-night (ถนนมืด ต้นไม้เขียวเข้ม น้ำฟ้าเข้ม)
                 const darkStyle = 'mapbox://styles/mapbox/navigation-night-v1';
                 
                 let isDarkMode = false;
 
                 const map = new mapboxgl.Map({
                     container: 'map',
-                    style: lightStyle, // เริ่มต้นด้วยโหมดสว่าง
-                    projection: 'globe', // มุมมองลูกโลก
-                    zoom: 2, 
+                    style: lightStyle, 
+                    projection: 'globe', 
+                    zoom: 5, // ซูมเข้ามาที่ระดับ 5 เพื่อให้เห็นชื่อจังหวัดชัดขึ้น
                     center: [100.5, 15] // ศูนย์กลางประเทศไทย
                 });
 
+                // --- เพิ่มส่วนควบคุมภาษา ---
+                // บังคับให้แผนที่พยายามใช้ภาษาไทย (th) ในทุกสไตล์ที่โหลด
+                const languagePlugin = new MapboxLanguage({
+                    defaultLanguage: 'th'
+                });
+                map.addControl(languagePlugin);
+
                 // เพิ่มปุ่มซูมและเข็มทิศ
                 map.addControl(new mapboxgl.NavigationControl(), 'top-right');
-                map.scrollZoom.disable(); // ปิดการซูมด้วยลูกกลิ้งเมาส์
+                map.scrollZoom.disable(); 
 
                 // ฟังก์ชันตั้งค่าชั้นบรรยากาศ (Fog) ให้สีเข้ากับโหมด
                 function updateFog() {
                     if (isDarkMode) {
-                        // บรรยากาศโหมดกลางคืน
                         map.setFog({
                             'color': 'rgb(25, 35, 50)', 
                             'high-color': 'rgb(15, 25, 40)', 
@@ -86,7 +94,6 @@
                             'star-intensity': 0.8
                         });
                     } else {
-                        // บรรยากาศโหมดกลางวัน
                         map.setFog({
                             'color': 'rgb(186, 210, 235)', 
                             'high-color': 'rgb(36, 92, 223)', 
@@ -96,7 +103,6 @@
                     }
                 }
 
-                // เมื่อแผนที่หรือสไตล์โหลดเสร็จ ให้แสดงชั้นบรรยากาศ
                 map.on('style.load', () => {
                     updateFog();
                 });
